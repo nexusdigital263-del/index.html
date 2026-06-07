@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NexusCRM — Nexus Digital Meta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0A0C10;font-family:'DM Sans',sans-serif;color:#E2E8F0;height:100vh;overflow:hidden}
+.crm-root{display:flex;height:100vh}
+.sidebar{width:220px;min-width:220px;background:#111318;border-right:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column}
+.sidebar-logo{padding:20px 16px 16px;border-bottom:1px solid rgba(255,255,255,0.06)}
+.logo-text{font-size:17px;font-weight:600;color:#fff;letter-spacing:-0.3px}
+.logo-sub{font-size:10px;color:#4B5563;font-family:'Space Mono',monospace;letter-spacing:1px;margin-top:2px}
+.sidebar-nav{flex:1;padding:12px 8px;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;color:#6B7280;font-size:13.5px;transition:all 200ms;margin-bottom:2px;border:1px solid transparent;user-select:none}
+.nav-item:hover{color:#CBD5E1;background:rgba(255,255,255,0.04)}
+.nav-item.active{color:#3B82F6;background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.2)}
+.nav-item i{font-size:16px}
+.nav-badge{margin-left:auto;background:#3B82F6;color:#fff;font-size:10px;font-family:'Space Mono',monospace;padding:1px 6px;border-radius:10px}
+.sidebar-footer{padding:12px 8px;border-top:1px solid rgba(255,255,255,0.06)}
+.user-card{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.03)}
+.user-avatar{width:30px;height:30px;border-radius:50%;background:rgba(59,130,246,0.2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#3B82F6;flex-shrink:0}
+.user-name{font-size:12px;font-weight:500;color:#CBD5E1}
+.user-role{font-size:10px;color:#4B5563}
+.main{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative}
+.topbar{padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;background:#111318;flex-shrink:0}
+.topbar-title{font-size:16px;font-weight:600;color:#fff}
+.topbar-sub{font-size:12px;color:#4B5563;margin-top:1px}
+.topbar-actions{display:flex;gap:8px}
+.btn-primary{background:#3B82F6;color:#fff;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:'DM Sans',sans-serif;transition:background 200ms}
+.btn-primary:hover{background:#2563EB}
+.btn-secondary{background:rgba(255,255,255,0.06);color:#CBD5E1;border:1px solid rgba(255,255,255,0.1);padding:7px 12px;border-radius:7px;font-size:12.5px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 200ms;display:inline-flex;align-items:center;gap:6px}
+.btn-secondary:hover{background:rgba(255,255,255,0.1)}
+.content{flex:1;overflow-y:auto;padding:20px 24px}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.kpi-card{background:#1A1D24;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:16px;position:relative}
+.kpi-label{font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px}
+.kpi-value{font-size:26px;font-weight:600;font-family:'Space Mono',monospace;color:#fff;line-height:1}
+.kpi-delta{font-size:11px;margin-top:6px;display:flex;align-items:center;gap:4px}
+.delta-up{color:#10B981}
+.delta-down{color:#EF4444}
+.kpi-icon{position:absolute;right:14px;top:14px;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.panels{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.panel{background:#1A1D24;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:18px}
+.panel-title{font-size:13px;font-weight:600;color:#CBD5E1;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.funnel-bar{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.funnel-label{font-size:11.5px;color:#9CA3AF;width:140px;flex-shrink:0}
+.funnel-track{flex:1;height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden}
+.funnel-fill{height:100%;border-radius:4px;transition:width 600ms ease}
+.funnel-count{font-size:11px;font-family:'Space Mono',monospace;color:#9CA3AF;width:24px;text-align:right}
+.activity-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+.activity-item:last-child{border-bottom:none}
+.act-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;margin-top:1px}
+.act-body{flex:1}
+.act-lead{font-size:12.5px;color:#CBD5E1;font-weight:500}
+.act-note{font-size:11.5px;color:#6B7280;margin-top:1px}
+.act-date{font-size:10px;font-family:'Space Mono',monospace;color:#4B5563;margin-top:2px}
+.filter-bar{display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap}
+.search-input{background:#1A1D24;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:7px 12px;color:#CBD5E1;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;min-width:180px;transition:border 200ms}
+.search-input:focus{border-color:rgba(59,130,246,0.5)}
+.search-input::placeholder{color:#4B5563}
+select.filter-sel{background:#1A1D24;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:7px 12px;color:#CBD5E1;font-size:12.5px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer}
+.leads-table{width:100%;border-collapse:collapse}
+.leads-table th{font-size:11px;text-transform:uppercase;letter-spacing:0.7px;color:#4B5563;font-weight:500;padding:8px 12px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.06);white-space:nowrap}
+.leads-table td{padding:10px 12px;font-size:13px;color:#CBD5E1;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:middle}
+.leads-table tr:hover td{background:rgba(255,255,255,0.02)}
+.status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:500;white-space:nowrap}
+.s-novo{background:rgba(59,130,246,0.15);color:#3B82F6;animation:pulse-blue 2s infinite}
+.s-contato{background:rgba(245,158,11,0.15);color:#F59E0B}
+.s-reuniao{background:rgba(139,92,246,0.15);color:#8B5CF6}
+.s-proposta{background:rgba(6,182,212,0.15);color:#06B6D4}
+.s-fechado{background:rgba(16,185,129,0.15);color:#10B981}
+.s-perdido{background:rgba(239,68,68,0.15);color:#EF4444}
+@keyframes pulse-blue{0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,0.3)}50%{box-shadow:0 0 0 4px rgba(59,130,246,0)}}
+.btn-sm{padding:4px 10px;font-size:11.5px;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#9CA3AF;transition:all 200ms}
+.btn-sm:hover{background:rgba(59,130,246,0.15);color:#3B82F6;border-color:rgba(59,130,246,0.3)}
+.mono{font-family:'Space Mono',monospace;font-size:11.5px;color:#4B5563}
+.drawer-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.5);z-index:50;opacity:0;transition:opacity 200ms;pointer-events:none}
+.drawer-overlay.open{opacity:1;pointer-events:all}
+.drawer{position:absolute;right:0;top:0;bottom:0;width:370px;background:#111318;border-left:1px solid rgba(255,255,255,0.08);z-index:51;transform:translateX(100%);transition:transform 280ms ease;overflow-y:auto}
+.drawer.open{transform:translateX(0)}
+.drawer-header{padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:flex-start;justify-content:space-between}
+.drawer-body{padding:20px}
+.drawer-close{background:none;border:none;color:#6B7280;cursor:pointer;font-size:18px;padding:2px}
+.drawer-close:hover{color:#CBD5E1}
+.drawer-label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.8px;color:#4B5563;margin-bottom:4px}
+.drawer-value{font-size:13.5px;color:#CBD5E1}
+.timeline-item{display:flex;gap:10px;margin-bottom:12px;padding-left:4px}
+.tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.tl-note{font-size:12px;color:#9CA3AF;margin-top:2px}
+.tl-date{font-size:10px;font-family:'Space Mono',monospace;color:#4B5563;margin-top:2px}
+.textarea-dark{width:100%;background:#0A0C10;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:#CBD5E1;font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical;min-height:80px;outline:none}
+.textarea-dark:focus{border-color:rgba(59,130,246,0.4)}
+.kanban-board{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px;height:100%}
+.kanban-col{width:200px;min-width:200px;background:#1A1D24;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px;display:flex;flex-direction:column;flex-shrink:0}
+.kanban-col-header{font-size:12px;font-weight:600;color:#9CA3AF;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.kanban-count{background:rgba(255,255,255,0.08);color:#6B7280;font-family:'Space Mono',monospace;font-size:10px;padding:2px 7px;border-radius:10px}
+.kcard{background:#111318;border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer;transition:all 200ms}
+.kcard:hover{border-color:rgba(59,130,246,0.3);background:#15181F}
+.kcard-company{font-size:13px;font-weight:500;color:#E2E8F0;margin-bottom:3px}
+.kcard-seg{font-size:11px;color:#6B7280;margin-bottom:8px}
+.kcard-value{font-family:'Space Mono',monospace;font-size:11px;color:#10B981;margin-bottom:6px}
+.kcard-footer{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.kcard-days{font-size:10px;color:#4B5563;font-family:'Space Mono',monospace}
+.kcard-avatar{width:22px;height:22px;border-radius:50%;background:rgba(59,130,246,0.2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#3B82F6;flex-shrink:0}
+.priority-badge{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:500}
+.p-alta{background:rgba(239,68,68,0.15);color:#EF4444}
+.p-media{background:rgba(245,158,11,0.15);color:#F59E0B}
+.p-baixa{background:rgba(16,185,129,0.15);color:#10B981}
+.calendar-grid{display:grid;grid-template-columns:1fr 300px;gap:16px}
+.cal-wrapper{background:#1A1D24;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:16px}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cal-month{font-size:14px;font-weight:600;color:#E2E8F0}
+.cal-nav{background:none;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9CA3AF;cursor:pointer;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.cal-nav:hover{background:rgba(255,255,255,0.06)}
+.cal-days-header{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:6px}
+.cal-day-name{font-size:10px;text-align:center;color:#4B5563;font-weight:500;padding:4px 0;text-transform:uppercase;letter-spacing:0.5px}
+.cal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:12.5px;color:#6B7280;border-radius:7px;cursor:pointer;transition:all 150ms;position:relative}
+.cal-day:hover{background:rgba(255,255,255,0.06);color:#CBD5E1}
+.cal-day.today{background:rgba(59,130,246,0.2);color:#3B82F6;font-weight:600}
+.cal-day.selected{background:#3B82F6;color:#fff;font-weight:600}
+.cal-day.has-task::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:#10B981}
+.cal-day.other-month{color:#2D3748}
+.tasks-panel{background:#1A1D24;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:16px;overflow-y:auto}
+.task-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+.task-item:last-child{border-bottom:none}
+.task-check{width:16px;height:16px;border-radius:4px;border:1.5px solid rgba(255,255,255,0.2);flex-shrink:0;margin-top:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 150ms}
+.task-check.done{background:#10B981;border-color:#10B981}
+.task-lead{font-size:12.5px;color:#CBD5E1;font-weight:500}
+.task-meta{font-size:11px;color:#6B7280;margin-top:2px;display:flex;gap:8px;align-items:center}
+.task-type-badge{font-size:10px;padding:1px 6px;border-radius:4px}
+.t-ligacao{background:rgba(245,158,11,0.15);color:#F59E0B}
+.t-whatsapp{background:rgba(16,185,129,0.15);color:#10B981}
+.t-reuniao{background:rgba(139,92,246,0.15);color:#8B5CF6}
+.t-email{background:rgba(59,130,246,0.15);color:#3B82F6}
+.modal-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.7);z-index:100;display:none;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:#1A1D24;border:1px solid rgba(255,255,255,0.1);border-radius:12px;width:400px;padding:24px;max-height:90vh;overflow-y:auto}
+.modal-title{font-size:15px;font-weight:600;color:#fff;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center}
+.modal-field{margin-bottom:14px}
+.modal-label{font-size:11px;text-transform:uppercase;letter-spacing:0.7px;color:#4B5563;margin-bottom:5px;display:block}
+.input-dark{width:100%;background:#111318;border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:8px 12px;color:#CBD5E1;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;transition:border 200ms}
+.input-dark:focus{border-color:rgba(59,130,246,0.4)}
+.toast{position:fixed;bottom:24px;right:24px;background:#10B981;color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;z-index:200;display:flex;align-items:center;gap:8px;transform:translateY(80px);transition:transform 300ms ease;pointer-events:none;box-shadow:0 4px 20px rgba(16,185,129,0.4)}
+.toast.show{transform:translateY(0)}
+.seg-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle}
+.report-table{width:100%;border-collapse:collapse}
+.report-table th{font-size:11px;text-transform:uppercase;letter-spacing:0.7px;color:#4B5563;font-weight:500;padding:8px 12px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.06)}
+.report-table td{padding:9px 12px;font-size:12.5px;color:#CBD5E1;border-bottom:1px solid rgba(255,255,255,0.04)}
+.empty-state{text-align:center;padding:48px 24px;color:#4B5563}
+.empty-state i{font-size:36px;display:block;margin:0 auto 10px}
+</style>
+</head>
+<body>
+<div class="crm-root">
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-text">NexusCRM</div>
+      <div class="logo-sub">NEXUS DIGITAL META</div>
+    </div>
+    <nav class="sidebar-nav" id="sidebar-nav">
+      <div class="nav-item active" data-page="dashboard"><i class="ti ti-layout-dashboard"></i> Dashboard</div>
+      <div class="nav-item" data-page="leads"><i class="ti ti-users"></i> Leads <span class="nav-badge">15</span></div>
+      <div class="nav-item" data-page="kanban"><i class="ti ti-layout-columns"></i> Kanban</div>
+      <div class="nav-item" data-page="agenda"><i class="ti ti-calendar"></i> Agenda</div>
+      <div class="nav-item" data-page="relatorios"><i class="ti ti-chart-bar"></i> Relatórios</div>
+      <div class="nav-item" data-page="config"><i class="ti ti-settings"></i> Configurações</div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="user-avatar">VH</div>
+        <div><div class="user-name">Victor Hugo</div><div class="user-role">Traffic Manager</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title" id="page-title">Dashboard</div>
+        <div style="font-size:12px;color:#4B5563;margin-top:1px" id="page-sub">Visão geral da prospecção</div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn-secondary" onclick="showToast('Exportado com sucesso!')"><i class="ti ti-download"></i> Exportar</button>
+        <button class="btn-primary" onclick="setPage('leads')"><i class="ti ti-plus"></i> Novo Lead</button>
+      </div>
+    </div>
+    <div class="content" id="content-area"></div>
+
+    <div class="drawer-overlay" id="drawer-overlay"></div>
+    <div class="drawer" id="drawer"></div>
+    <div class="modal-overlay" id="modal-overlay"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><i class="ti ti-check"></i> <span id="toast-msg">Salvo!</span></div>
+
+<script>
+const MOCK = {
+  leads:[
+    {id:1,empresa:"Auto Nunes",segmento:"Concessionária",responsavel:"Renato",cidade:"Uberlândia",status:"Reunião Agendada",telefone:"(34) 99123-4567",cnpj:"12.345.678/0001-90",cargo:"Gerente Comercial",valor:2500,dias:12,prioridade:"Alta",interacoes:[{tipo:"WhatsApp",data:"05/06/2025",nota:"Enviou interesse em tráfego pago para veículos"},{tipo:"Ligação",data:"06/06/2025",nota:"Confirmou reunião para segunda-feira às 10h"}]},
+    {id:2,empresa:"Clínica Sorriso",segmento:"Clínica Odontológica",responsavel:"Dra. Ana",cidade:"Uberlândia",status:"Proposta Enviada",telefone:"(34) 98765-4321",cnpj:"23.456.789/0001-01",cargo:"Diretora",valor:3000,dias:8,prioridade:"Alta",interacoes:[{tipo:"Reunião",data:"03/06/2025",nota:"Apresentou necessidade de captar mais pacientes particulares. Muito interesse!"}]},
+    {id:3,empresa:"Delivery Rápido",segmento:"Delivery",responsavel:"Carlos",cidade:"Uberaba",status:"Em Contato",telefone:"(34) 91234-5678",cnpj:"34.567.890/0001-12",cargo:"Sócio",valor:1500,dias:5,prioridade:"Média",interacoes:[{tipo:"WhatsApp",data:"04/06/2025",nota:"Pediu cases de delivery para analisar"}]},
+    {id:4,empresa:"Vida Natural",segmento:"Loja Natural",responsavel:"Fernanda",cidade:"Araxá",status:"Novo",telefone:"(34) 92345-6789",cnpj:"45.678.901/0001-23",cargo:"Proprietária",valor:1500,dias:1,prioridade:"Baixa",interacoes:[]},
+    {id:5,empresa:"Odonto Prime",segmento:"Clínica Odontológica",responsavel:"Dr. Paulo",cidade:"Uberaba",status:"Fechado",telefone:"(34) 93456-7890",cnpj:"56.789.012/0001-34",cargo:"Proprietário",valor:2800,dias:30,prioridade:"Alta",interacoes:[{tipo:"Reunião",data:"01/05/2025",nota:"Fechou contrato de 3 meses. Muito satisfeito!"}]},
+    {id:6,empresa:"Moto Giro",segmento:"Concessionária",responsavel:"João",cidade:"Uberlândia",status:"Perdido",telefone:"(34) 94567-8901",cnpj:"67.890.123/0001-45",cargo:"Gerente",valor:2000,dias:20,prioridade:"Média",interacoes:[{tipo:"Ligação",data:"20/05/2025",nota:"Sem budget no momento. Retornar em 3 meses"}]},
+    {id:7,empresa:"Burger Box",segmento:"Delivery",responsavel:"Pedro",cidade:"Uberlândia",status:"Em Contato",telefone:"(34) 95678-9012",cnpj:"78.901.234/0001-56",cargo:"Dono",valor:1500,dias:3,prioridade:"Média",interacoes:[{tipo:"WhatsApp",data:"05/06/2025",nota:"Quer ver cases de outros deliveries"}]},
+    {id:8,empresa:"Ervas & Cia",segmento:"Loja Natural",responsavel:"Marta",cidade:"Araxá",status:"Novo",telefone:"(34) 96789-0123",cnpj:"89.012.345/0001-67",cargo:"Proprietária",valor:1500,dias:1,prioridade:"Baixa",interacoes:[]},
+    {id:9,empresa:"Honda Center",segmento:"Concessionária",responsavel:"Marcelo",cidade:"Uberaba",status:"Reunião Agendada",telefone:"(34) 97890-1234",cnpj:"90.123.456/0001-78",cargo:"Diretor",valor:3000,dias:7,prioridade:"Alta",interacoes:[{tipo:"Reunião",data:"07/06/2025",nota:"Reunião agendada para quinta-feira"}]},
+    {id:10,empresa:"Sorrident",segmento:"Clínica Odontológica",responsavel:"Dra. Carla",cidade:"Uberlândia",status:"Em Contato",telefone:"(34) 98901-2345",cnpj:"01.234.567/0001-89",cargo:"Sócia",valor:3500,dias:4,prioridade:"Alta",interacoes:[{tipo:"E-mail",data:"04/06/2025",nota:"Enviou apresentação por e-mail"}]},
+    {id:11,empresa:"Pizza Express",segmento:"Delivery",responsavel:"Roberto",cidade:"Araxá",status:"Proposta Enviada",telefone:"(34) 91011-1213",cnpj:"11.121.314/0001-51",cargo:"Dono",valor:1500,dias:9,prioridade:"Média",interacoes:[{tipo:"WhatsApp",data:"02/06/2025",nota:"Proposta enviada, aguardando retorno"}]},
+    {id:12,empresa:"Chico Natural",segmento:"Loja Natural",responsavel:"Francisco",cidade:"Uberlândia",status:"Fechado",telefone:"(34) 91314-1516",cnpj:"13.141.516/0001-17",cargo:"Sócio",valor:1500,dias:45,prioridade:"Baixa",interacoes:[{tipo:"Reunião",data:"15/04/2025",nota:"Fechou contrato após 2 reuniões"}]},
+    {id:13,empresa:"Mega Motos",segmento:"Concessionária",responsavel:"Silvio",cidade:"Uberlândia",status:"Em Contato",telefone:"(34) 91617-1819",cnpj:"16.171.819/0001-20",cargo:"Gerente",valor:2500,dias:6,prioridade:"Média",interacoes:[{tipo:"Ligação",data:"05/06/2025",nota:"Ligou pedindo mais informações sobre resultados"}]},
+    {id:14,empresa:"Clínica Bem Estar",segmento:"Clínica Odontológica",responsavel:"Dr. Marcos",cidade:"Araxá",status:"Novo",telefone:"(34) 92021-2223",cnpj:"20.212.223/0001-24",cargo:"Proprietário",valor:3000,dias:1,prioridade:"Alta",interacoes:[]},
+    {id:15,empresa:"Sushi Delivery",segmento:"Delivery",responsavel:"Kenji",cidade:"Uberaba",status:"Em Contato",telefone:"(34) 92324-2526",cnpj:"23.242.526/0001-27",cargo:"Sócio",valor:1500,dias:2,prioridade:"Baixa",interacoes:[{tipo:"WhatsApp",data:"06/06/2025",nota:"Primeiro contato realizado com sucesso"}]},
+  ],
+  activities:[
+    {tipo:"WhatsApp",lead:"Auto Nunes",nota:"Confirmou reunião para segunda",data:"06/06",cor:"#10B981",icon:"ti-brand-whatsapp"},
+    {tipo:"Reunião",lead:"Honda Center",nota:"Diagnóstico comercial realizado",data:"05/06",cor:"#8B5CF6",icon:"ti-users"},
+    {tipo:"Ligação",lead:"Sorrident",nota:"Follow-up pós proposta",data:"05/06",cor:"#F59E0B",icon:"ti-phone"},
+    {tipo:"E-mail",lead:"Pizza Express",nota:"Case de delivery enviado",data:"04/06",cor:"#3B82F6",icon:"ti-mail"},
+    {tipo:"WhatsApp",lead:"Burger Box",nota:"Pediu cases de delivery",data:"04/06",cor:"#10B981",icon:"ti-brand-whatsapp"},
+    {tipo:"Ligação",lead:"Mega Motos",nota:"Interesse confirmado em tráfego",data:"03/06",cor:"#F59E0B",icon:"ti-phone"},
+    {tipo:"WhatsApp",lead:"Sushi Delivery",nota:"Primeiro contato realizado",data:"01/06",cor:"#10B981",icon:"ti-brand-whatsapp"},
+    {tipo:"Reunião",lead:"Odonto Prime",nota:"Fechamento de contrato",data:"01/05",cor:"#8B5CF6",icon:"ti-users"},
+  ],
+};
+
+let state = {
+  page:'dashboard',
+  filterSeg:'todos', filterStatus:'todos', filterCity:'todos', search:'',
+  selectedDay:7, calMonth:5, calYear:2025,
+  tasks:[
+    {id:1,lead:"Auto Nunes",tipo:"Reunião",hora:"10:00",dia:7,done:false,obs:"Levar proposta comercial"},
+    {id:2,lead:"Clínica Sorriso",tipo:"Ligação",hora:"11:30",dia:7,done:false,obs:"Follow-up da proposta"},
+    {id:3,lead:"Honda Center",tipo:"WhatsApp",hora:"14:00",dia:7,done:true,obs:"Confirmar reunião"},
+    {id:4,lead:"Sorrident",tipo:"E-mail",hora:"16:00",dia:8,done:false,obs:"Enviar case de clínica"},
+    {id:5,lead:"Mega Motos",tipo:"Ligação",hora:"09:00",dia:9,done:false,obs:"Agendar reunião de diagnóstico"},
+    {id:6,lead:"Burger Box",tipo:"WhatsApp",hora:"13:00",dia:10,done:false,obs:"Enviar proposta comercial"},
+  ],
+  drawerOpen:false,
+  selectedLead:null,
+};
+
+const statusCls = {
+  'Novo':'s-novo','Em Contato':'s-contato','Reunião Agendada':'s-reuniao',
+  'Proposta Enviada':'s-proposta','Fechado':'s-fechado','Perdido':'s-perdido'
+};
+const tipoCls = {'Ligação':'t-ligacao','WhatsApp':'t-whatsapp','Reunião':'t-reuniao','E-mail':'t-email'};
+const segCores = {'Clínica Odontológica':'#8B5CF6','Concessionária':'#3B82F6','Delivery':'#F59E0B','Loja Natural':'#10B981'};
+const pageTitles = {
+  dashboard:['Dashboard','Visão geral da prospecção'],
+  leads:['Leads','Gerenciamento de prospecção'],
+  kanban:['Kanban','Funil visual de vendas'],
+  agenda:['Agenda','Tarefas e follow-ups'],
+  relatorios:['Relatórios','Análise de desempenho'],
+  config:['Configurações','Preferências do sistema'],
+};
+
+function setPage(p) {
+  state.page=p; closeDrawer();
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
+  const t=pageTitles[p]||['',''];
+  document.getElementById('page-title').textContent=t[0];
+  document.getElementById('page-sub').textContent=t[1];
+  render();
+}
+
+document.getElementById('sidebar-nav').addEventListener('click',e=>{
+  const item=e.target.closest('.nav-item');
+  if(item) setPage(item.dataset.page);
+});
+
+function render() {
+  const ca=document.getElementById('content-area');
+  if(state.page==='dashboard') renderDashboard(ca);
+  else if(state.page==='leads') renderLeads(ca);
+  else if(state.page==='kanban') renderKanban(ca);
+  else if(state.page==='agenda') renderAgenda(ca);
+  else if(state.page==='relatorios') renderRelatorios(ca);
+  else renderConfig(ca);
+}
+
+function renderDashboard(ca) {
+  const leads=MOCK.leads;
+  const total=leads.length;
+  const neg=leads.filter(l=>['Em Contato','Reunião Agendada','Proposta Enviada'].includes(l.status)).length;
+  const fechados=leads.filter(l=>l.status==='Fechado').length;
+  const taxa=Math.round((fechados/total)*100);
+  const funnelSteps=[
+    {label:'Prospecção',count:leads.filter(l=>l.status==='Novo').length,cor:'#3B82F6'},
+    {label:'Contato Feito',count:leads.filter(l=>l.status==='Em Contato').length,cor:'#8B5CF6'},
+    {label:'Reunião Agendada',count:leads.filter(l=>l.status==='Reunião Agendada').length,cor:'#F59E0B'},
+    {label:'Proposta Enviada',count:leads.filter(l=>l.status==='Proposta Enviada').length,cor:'#06B6D4'},
+    {label:'Fechado',count:fechados,cor:'#10B981'},
+  ];
+  const maxF=Math.max(...funnelSteps.map(f=>f.count),1);
+  ca.innerHTML=`
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-icon" style="background:rgba(59,130,246,0.15);color:#3B82F6"><i class="ti ti-users"></i></div>
+      <div class="kpi-label">Total de Leads</div>
+      <div class="kpi-value">${total}</div>
+      <div class="kpi-delta delta-up"><i class="ti ti-arrow-up-right" style="font-size:11px"></i>+3 este mês</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon" style="background:rgba(245,158,11,0.15);color:#F59E0B"><i class="ti ti-loader"></i></div>
+      <div class="kpi-label">Em Negociação</div>
+      <div class="kpi-value">${neg}</div>
+      <div class="kpi-delta delta-up"><i class="ti ti-arrow-up-right" style="font-size:11px"></i>+2 vs mês anterior</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon" style="background:rgba(16,185,129,0.15);color:#10B981"><i class="ti ti-circle-check"></i></div>
+      <div class="kpi-label">Fechamentos</div>
+      <div class="kpi-value">${fechados}</div>
+      <div class="kpi-delta delta-up"><i class="ti ti-arrow-up-right" style="font-size:11px"></i>+1 este mês</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon" style="background:rgba(139,92,246,0.15);color:#8B5CF6"><i class="ti ti-percentage"></i></div>
+      <div class="kpi-label">Taxa de Conversão</div>
+      <div class="kpi-value">${taxa}%</div>
+      <div class="kpi-delta delta-down"><i class="ti ti-arrow-down-right" style="font-size:11px"></i>-2% vs mês anterior</div>
+    </div>
+  </div>
+  <div class="panels">
+    <div class="panel">
+      <div class="panel-title"><i class="ti ti-chart-bar" style="color:#3B82F6"></i> Funil de Vendas</div>
+      ${funnelSteps.map(f=>`<div class="funnel-bar">
+        <div class="funnel-label">${f.label}</div>
+        <div class="funnel-track"><div class="funnel-fill" style="width:${Math.round((f.count/maxF)*100)}%;background:${f.cor}"></div></div>
+        <div class="funnel-count">${f.count}</div>
+      </div>`).join('')}
+    </div>
+    <div class="panel">
+      <div class="panel-title"><i class="ti ti-activity" style="color:#10B981"></i> Atividade Recente</div>
+      ${MOCK.activities.map(a=>`<div class="activity-item">
+        <div class="act-icon" style="background:${a.cor}20;color:${a.cor}"><i class="ti ${a.icon}"></i></div>
+        <div class="act-body">
+          <div class="act-lead">${a.lead}</div>
+          <div class="act-note">${a.nota}</div>
+          <div class="act-date">${a.data} · ${a.tipo}</div>
+        </div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function renderLeads(ca) {
+  let filtered=MOCK.leads.filter(l=>{
+    if(state.search && !l.empresa.toLowerCase().includes(state.search.toLowerCase())) return false;
+    if(state.filterSeg!=='todos' && l.segmento!==state.filterSeg) return false;
+    if(state.filterStatus!=='todos' && l.status!==state.filterStatus) return false;
+    if(state.filterCity!=='todos' && l.cidade!==state.filterCity) return false;
+    return true;
+  });
+  ca.innerHTML=`
+  <div class="filter-bar">
+    <input class="search-input" placeholder="Buscar empresa..." value="${state.search}" id="fi-search">
+    <select class="filter-sel" id="fi-seg">
+      <option value="todos" ${state.filterSeg==='todos'?'selected':''}>Todos segmentos</option>
+      <option value="Clínica Odontológica" ${state.filterSeg==='Clínica Odontológica'?'selected':''}>Clínica Odontológica</option>
+      <option value="Concessionária" ${state.filterSeg==='Concessionária'?'selected':''}>Concessionária</option>
+      <option value="Delivery" ${state.filterSeg==='Delivery'?'selected':''}>Delivery</option>
+      <option value="Loja Natural" ${state.filterSeg==='Loja Natural'?'selected':''}>Loja Natural</option>
+    </select>
+    <select class="filter-sel" id="fi-status">
+      <option value="todos" ${state.filterStatus==='todos'?'selected':''}>Todos status</option>
+      <option value="Novo">Novo</option>
+      <option value="Em Contato">Em Contato</option>
+      <option value="Reunião Agendada">Reunião Agendada</option>
+      <option value="Proposta Enviada">Proposta Enviada</option>
+      <option value="Fechado">Fechado</option>
+      <option value="Perdido">Perdido</option>
+    </select>
+    <select class="filter-sel" id="fi-city">
+      <option value="todos">Todas cidades</option>
+      <option value="Uberlândia" ${state.filterCity==='Uberlândia'?'selected':''}>Uberlândia</option>
+      <option value="Uberaba" ${state.filterCity==='Uberaba'?'selected':''}>Uberaba</option>
+      <option value="Araxá" ${state.filterCity==='Araxá'?'selected':''}>Araxá</option>
+    </select>
+    <span style="margin-left:auto;font-size:12px;color:#4B5563;font-family:'Space Mono',monospace">${filtered.length} de ${MOCK.leads.length} leads</span>
+  </div>
+  <div style="background:#1A1D24;border:1px solid rgba(255,255,255,0.06);border-radius:10px;overflow:hidden">
+    <table class="leads-table">
+      <thead><tr>
+        <th>#</th><th>Empresa</th><th>Segmento</th><th>Responsável</th><th>Cidade</th>
+        <th>Status</th><th>Último Contato</th><th>Valor Est.</th><th></th>
+      </tr></thead>
+      <tbody>
+      ${filtered.length===0?`<tr><td colspan="9"><div class="empty-state"><i class="ti ti-search-off"></i>Nenhum lead encontrado com esses filtros</div></td></tr>`:''}
+      ${filtered.map(l=>`<tr>
+        <td class="mono">#${String(l.id).padStart(3,'0')}</td>
+        <td style="font-weight:500;color:#E2E8F0">${l.empresa}</td>
+        <td><span style="font-size:11.5px;color:#9CA3AF">${l.segmento}</span></td>
+        <td>${l.responsavel}</td>
+        <td style="font-size:12px;color:#9CA3AF">${l.cidade}</td>
+        <td><span class="status-badge ${statusCls[l.status]||''}">${l.status}</span></td>
+        <td class="mono" style="font-size:11px">${l.interacoes.length?l.interacoes[l.interacoes.length-1].data:'—'}</td>
+        <td style="color:#10B981;font-family:'Space Mono',monospace;font-size:12px">R$ ${l.valor.toLocaleString()}/mês</td>
+        <td><button class="btn-sm" data-open-drawer="${l.id}">Ver detalhes</button></td>
+      </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+
+  document.getElementById('fi-search').addEventListener('input',e=>{state.search=e.target.value;renderLeads(ca)});
+  document.getElementById('fi-seg').addEventListener('change',e=>{state.filterSeg=e.target.value;renderLeads(ca)});
+  document.getElementById('fi-status').addEventListener('change',e=>{state.filterStatus=e.target.value;renderLeads(ca)});
+  document.getElementById('fi-city').addEventListener('change',e=>{state.filterCity=e.target.value;renderLeads(ca)});
+  ca.querySelectorAll('[data-open-drawer]').forEach(btn=>{
+    btn.addEventListener('click',()=>openDrawer(parseInt(btn.dataset.openDrawer)));
+  });
+}
+
+function openDrawer(id) {
+  const lead=MOCK.leads.find(l=>l.id===id);
+  if(!lead) return;
+  state.selectedLead=lead;
+  const d=document.getElementById('drawer');
+  d.innerHTML=`
+  <div class="drawer-header">
+    <div>
+      <div style="font-size:15px;font-weight:600;color:#fff;margin-bottom:6px">${lead.empresa}</div>
+      <span class="status-badge ${statusCls[lead.status]||''}">${lead.status}</span>
+    </div>
+    <button class="drawer-close" id="close-drawer"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="drawer-body">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
+      <div><div class="drawer-label">Segmento</div><div class="drawer-value">${lead.segmento}</div></div>
+      <div><div class="drawer-label">Cidade</div><div class="drawer-value">${lead.cidade}</div></div>
+      <div><div class="drawer-label">CNPJ</div><div class="mono" style="font-size:11.5px;color:#9CA3AF">${lead.cnpj}</div></div>
+      <div><div class="drawer-label">Valor Est.</div><div style="color:#10B981;font-family:'Space Mono',monospace;font-size:13px">R$ ${lead.valor.toLocaleString()}/mês</div></div>
+    </div>
+    <div style="background:#0A0C10;border-radius:8px;padding:12px;margin-bottom:18px;border:1px solid rgba(255,255,255,0.05)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="width:34px;height:34px;border-radius:50%;background:rgba(59,130,246,0.2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#3B82F6;flex-shrink:0">${lead.responsavel.charAt(0)}</div>
+        <div><div style="font-size:13px;font-weight:500;color:#E2E8F0">${lead.responsavel}</div><div style="font-size:11px;color:#6B7280">${lead.cargo}</div></div>
+      </div>
+      <div style="font-size:12px;color:#6B7280;display:flex;align-items:center;gap:6px"><i class="ti ti-brand-whatsapp" style="color:#10B981;font-size:14px"></i>${lead.telefone}</div>
+    </div>
+    <div style="font-size:11px;font-weight:600;color:#4B5563;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px">Timeline de Interações</div>
+    ${lead.interacoes.length===0?`<div style="text-align:center;padding:16px;color:#4B5563;font-size:13px"><i class="ti ti-messages" style="display:block;font-size:24px;margin:0 auto 6px"></i>Nenhuma interação ainda</div>`:''}
+    ${lead.interacoes.map(i=>`<div class="timeline-item">
+      <div class="tl-dot" style="background:${i.tipo==='WhatsApp'?'#10B981':i.tipo==='Reunião'?'#8B5CF6':i.tipo==='Ligação'?'#F59E0B':'#3B82F6'}"></div>
+      <div>
+        <div style="font-size:11px;font-weight:600;color:${i.tipo==='WhatsApp'?'#10B981':i.tipo==='Reunião'?'#8B5CF6':i.tipo==='Ligação'?'#F59E0B':'#3B82F6'}">${i.tipo}</div>
+        <div class="tl-note">${i.nota}</div>
+        <div class="tl-date">${i.data}</div>
+      </div>
+    </div>`).join('')}
+    <div style="margin-top:18px;border-top:1px solid rgba(255,255,255,0.06);padding-top:16px">
+      <div style="font-size:11px;font-weight:600;color:#4B5563;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px">Registrar Interação</div>
+      <select class="input-dark" id="new-tipo" style="margin-bottom:8px">
+        <option>WhatsApp</option><option>Ligação</option><option>Reunião</option><option>E-mail</option>
+      </select>
+      <textarea class="textarea-dark" placeholder="Anotação da interação..." id="new-nota"></textarea>
+      <button class="btn-primary" style="width:100%;margin-top:10px;justify-content:center" id="btn-registrar"><i class="ti ti-send"></i> Registrar</button>
+    </div>
+  </div>`;
+
+  document.getElementById('close-drawer').addEventListener('click',closeDrawer);
+  document.getElementById('drawer-overlay').addEventListener('click',closeDrawer);
+  document.getElementById('btn-registrar').addEventListener('click',()=>{
+    const tipo=document.getElementById('new-tipo').value;
+    const nota=document.getElementById('new-nota').value.trim();
+    if(!nota) return;
+    lead.interacoes.push({tipo,nota,data:'07/06/2025'});
+    showToast('Interação registrada!');
+    openDrawer(id);
+  });
+
+  document.getElementById('drawer-overlay').classList.add('open');
+  d.classList.add('open');
+}
+
+function closeDrawer() {
+  document.getElementById('drawer-overlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawer-overlay').removeEventListener('click',closeDrawer);
+}
+
+function renderKanban(ca) {
+  const cols=[
+    {id:'Novo',label:'Prospecção',cor:'#3B82F6',icon:'ti-circle-dot'},
+    {id:'Em Contato',label:'Contato Feito',cor:'#F59E0B',icon:'ti-phone'},
+    {id:'Reunião Agendada',label:'Reunião Agendada',cor:'#8B5CF6',icon:'ti-calendar'},
+    {id:'Proposta Enviada',label:'Proposta Enviada',cor:'#06B6D4',icon:'ti-file-text'},
+    {id:'Fechado',label:'Fechado',cor:'#10B981',icon:'ti-circle-check'},
+    {id:'Perdido',label:'Perdido',cor:'#EF4444',icon:'ti-x'},
+  ];
+  ca.innerHTML=`<div class="kanban-board">${cols.map(col=>{
+    const cards=MOCK.leads.filter(l=>l.status===col.id);
+    return `<div class="kanban-col">
+      <div class="kanban-col-header" style="color:${col.cor}">
+        <span><i class="ti ${col.icon}" style="margin-right:5px"></i>${col.label}</span>
+        <span class="kanban-count">${cards.length}</span>
+      </div>
+      ${cards.map(l=>`<div class="kcard" data-open="${l.id}">
+        <div class="kcard-company">${l.empresa}</div>
+        <div class="kcard-seg">${l.segmento}</div>
+        <div class="kcard-value"><i class="ti ti-currency-real" style="font-size:10px"></i> ${l.valor.toLocaleString()}/mês</div>
+        <div class="kcard-footer">
+          <span class="kcard-days"><i class="ti ti-clock" style="font-size:10px"></i>${l.dias}d</span>
+          <span class="priority-badge ${l.prioridade==='Alta'?'p-alta':l.prioridade==='Média'?'p-media':'p-baixa'}">${l.prioridade}</span>
+          <div class="kcard-avatar">${l.responsavel.charAt(0)}</div>
+        </div>
+      </div>`).join('')}
+    </div>`;
+  }).join('')}</div>`;
+  ca.querySelectorAll('[data-open]').forEach(card=>{
+    card.addEventListener('click',()=>openDrawer(parseInt(card.dataset.open)));
+  });
+}
+
+function renderAgenda(ca) {
+  const months=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const daysInMonth=new Date(state.calYear,state.calMonth+1,0).getDate();
+  const firstDay=new Date(state.calYear,state.calMonth,1).getDay();
+  const dayNames=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const taskDays=[...new Set(state.tasks.map(t=>t.dia))];
+  const todayTasks=state.tasks.filter(t=>t.dia===state.selectedDay);
+  const prevDays=new Date(state.calYear,state.calMonth,0).getDate();
+
+  let calDays='';
+  for(let i=0;i<firstDay;i++) calDays+=`<div class="cal-day other-month">${prevDays-firstDay+i+1}</div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const isToday=d===7&&state.calMonth===5;
+    const isSel=d===state.selectedDay;
+    const hasTask=taskDays.includes(d);
+    calDays+=`<div class="cal-day${isToday?' today':''}${isSel?' selected':''}${hasTask?' has-task':''}" data-day="${d}">${d}</div>`;
+  }
+
+  ca.innerHTML=`
+  <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+    <button class="btn-primary" id="btn-new-task"><i class="ti ti-plus"></i> Nova Tarefa</button>
+  </div>
+  <div class="calendar-grid">
+    <div class="cal-wrapper">
+      <div class="cal-header">
+        <button class="cal-nav" id="cal-prev"><i class="ti ti-chevron-left"></i></button>
+        <div class="cal-month">${months[state.calMonth]} ${state.calYear}</div>
+        <button class="cal-nav" id="cal-next"><i class="ti ti-chevron-right"></i></button>
+      </div>
+      <div class="cal-days-header">${dayNames.map(d=>`<div class="cal-day-name">${d}</div>`).join('')}</div>
+      <div class="cal-days" id="cal-days">${calDays}</div>
+    </div>
+    <div class="tasks-panel">
+      <div class="panel-title" style="margin-bottom:12px"><i class="ti ti-list-check" style="color:#3B82F6"></i> Dia ${state.selectedDay} — ${todayTasks.length} tarefa(s)</div>
+      ${todayTasks.length===0?`<div class="empty-state" style="padding:24px"><i class="ti ti-check-circle" style="color:#10B981"></i>Nenhuma tarefa neste dia</div>`:''}
+      ${todayTasks.map(t=>`<div class="task-item">
+        <div class="task-check${t.done?' done':''}" data-toggle="${t.id}">${t.done?'<i class="ti ti-check" style="font-size:10px;color:#fff"></i>':''}</div>
+        <div>
+          <div class="task-lead" style="${t.done?'text-decoration:line-through;color:#4B5563':''}">${t.lead}</div>
+          <div class="task-meta">
+            <span class="task-type-badge ${tipoCls[t.tipo]||''}">${t.tipo}</span>
+            <span style="font-family:'Space Mono',monospace;font-size:11px">${t.hora}</span>
+          </div>
+          ${t.obs?`<div style="font-size:11px;color:#4B5563;margin-top:3px">${t.obs}</div>`:''}
+        </div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+
+  document.getElementById('cal-prev').addEventListener('click',()=>{
+    state.calMonth=state.calMonth===0?11:state.calMonth-1;
+    if(state.calMonth===11) state.calYear--;
+    renderAgenda(ca);
+  });
+  document.getElementById('cal-next').addEventListener('click',()=>{
+    state.calMonth=state.calMonth===11?0:state.calMonth+1;
+    if(state.calMonth===0) state.calYear++;
+    renderAgenda(ca);
+  });
+  document.getElementById('cal-days').addEventListener('click',e=>{
+    const d=e.target.closest('[data-day]');
+    if(d){ state.selectedDay=parseInt(d.dataset.day); renderAgenda(ca); }
+  });
+  ca.querySelectorAll('[data-toggle]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const t=state.tasks.find(t=>t.id===parseInt(el.dataset.toggle));
+      if(t){ t.done=!t.done; renderAgenda(ca); }
+    });
+  });
+  document.getElementById('btn-new-task').addEventListener('click',openModalTask);
+}
+
+function openModalTask() {
+  const mo=document.getElementById('modal-overlay');
+  mo.innerHTML=`<div class="modal">
+    <div class="modal-title">Nova Tarefa <button id="close-modal" style="background:none;border:none;color:#6B7280;cursor:pointer;font-size:18px"><i class="ti ti-x"></i></button></div>
+    <div class="modal-field"><label class="modal-label">Tipo</label>
+      <select class="input-dark" id="m-tipo"><option>Ligação</option><option>WhatsApp</option><option>Reunião</option><option>E-mail</option></select></div>
+    <div class="modal-field"><label class="modal-label">Lead</label>
+      <select class="input-dark" id="m-lead">${MOCK.leads.map(l=>`<option>${l.empresa}</option>`).join('')}</select></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-field"><label class="modal-label">Dia</label><input type="number" class="input-dark" id="m-dia" value="${state.selectedDay}" min="1" max="31"></div>
+      <div class="modal-field"><label class="modal-label">Hora</label><input type="time" class="input-dark" id="m-hora" value="09:00"></div>
+    </div>
+    <div class="modal-field"><label class="modal-label">Observação</label><input class="input-dark" id="m-obs" placeholder="Nota opcional..."></div>
+    <button class="btn-primary" style="width:100%;margin-top:6px;justify-content:center" id="btn-save-task"><i class="ti ti-check"></i> Salvar Tarefa</button>
+  </div>`;
+  mo.classList.add('open');
+  document.getElementById('close-modal').addEventListener('click',closeModal);
+  document.getElementById('btn-save-task').addEventListener('click',()=>{
+    const tipo=document.getElementById('m-tipo').value;
+    const lead=document.getElementById('m-lead').value;
+    const dia=parseInt(document.getElementById('m-dia').value)||state.selectedDay;
+    const hora=document.getElementById('m-hora').value||'09:00';
+    const obs=document.getElementById('m-obs').value;
+    state.tasks.push({id:Date.now(),lead,tipo,hora,dia,done:false,obs});
+    closeModal(); showToast('Tarefa criada!');
+    renderAgenda(document.getElementById('content-area'));
+  });
+}
+
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+
+function renderRelatorios(ca) {
+  const segs=['Clínica Odontológica','Concessionária','Delivery','Loja Natural'];
+  const segData=segs.map(s=>({
+    seg:s,
+    leads:MOCK.leads.filter(l=>l.segmento===s).length,
+    reunioes:MOCK.leads.filter(l=>l.segmento===s&&['Reunião Agendada','Proposta Enviada','Fechado'].includes(l.status)).length,
+    fechamentos:MOCK.leads.filter(l=>l.segmento===s&&l.status==='Fechado').length,
+    receita:MOCK.leads.filter(l=>l.segmento===s&&l.status==='Fechado').reduce((a,l)=>a+l.valor,0),
+    ticket:Math.round(MOCK.leads.filter(l=>l.segmento===s).reduce((a,l)=>a+l.valor,0)/Math.max(MOCK.leads.filter(l=>l.segmento===s).length,1)),
+  }));
+  const total=MOCK.leads.length;
+  const meses=['Jan','Fev','Mar','Abr','Mai','Jun'];
+  const abertos=[4,6,8,10,13,15];
+  const fechadosMes=[0,0,1,1,2,2];
+  const maxB=15;
+  const cidades=['Uberlândia','Uberaba','Araxá'];
+  const maxC=Math.max(...cidades.map(c=>MOCK.leads.filter(l=>l.cidade===c).length),1);
+
+  // Pie chart paths
+  let pieHTML='';
+  let offset=0;
+  const r=45,cx=55,cy=55,circ=2*Math.PI*r;
+  segs.forEach(s=>{
+    const pct=MOCK.leads.filter(l=>l.segmento===s).length/total;
+    const dash=pct*circ;
+    pieHTML+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${segCores[s]}" stroke-width="20" stroke-dasharray="${dash.toFixed(2)} ${(circ-dash).toFixed(2)}" stroke-dashoffset="${(-offset*circ).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    offset+=pct;
+  });
+
+  ca.innerHTML=`
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+    <div class="panel">
+      <div class="panel-title"><i class="ti ti-chart-pie" style="color:#8B5CF6"></i> Leads por Segmento</div>
+      <div style="display:flex;align-items:center;gap:20px">
+        <svg width="110" height="110" viewBox="0 0 110 110" style="flex-shrink:0">${pieHTML}</svg>
+        <div style="flex:1">
+          ${segs.map(s=>{const c=MOCK.leads.filter(l=>l.segmento===s).length;return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;color:#9CA3AF">
+            <span class="seg-dot" style="background:${segCores[s]};flex-shrink:0"></span>
+            <span style="flex:1;font-size:11px">${s.length>20?s.substring(0,18)+'…':s}</span>
+            <span style="font-family:'Space Mono',monospace;font-size:11px;color:#CBD5E1">${c}</span>
+          </div>`;}).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><i class="ti ti-trending-up" style="color:#3B82F6"></i> Evolução — 6 meses</div>
+      <svg width="100%" height="120" viewBox="0 0 290 120" preserveAspectRatio="xMidYMid meet">
+        ${meses.map((m,i)=>{
+          const x=20+i*45;
+          const hA=Math.round((abertos[i]/maxB)*90);
+          const hF=Math.round((fechadosMes[i]/maxB)*90);
+          return `<rect x="${x}" y="${110-hA}" width="14" height="${hA}" fill="#3B82F6" opacity="0.8" rx="2"/>
+          <rect x="${x+16}" y="${110-hF}" width="14" height="${hF||2}" fill="#10B981" opacity="0.8" rx="2"/>
+          <text x="${x+14}" y="118" fill="#4B5563" font-size="9" text-anchor="middle" font-family="DM Sans">${m}</text>`;
+        }).join('')}
+        <line x1="14" y1="110" x2="278" y2="110" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+      </svg>
+      <div style="display:flex;gap:16px;margin-top:8px;font-size:11px">
+        <span style="color:#3B82F6;display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:#3B82F6;border-radius:2px;opacity:.8;display:inline-block"></span>Abertos</span>
+        <span style="color:#10B981;display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:#10B981;border-radius:2px;opacity:.8;display:inline-block"></span>Fechados</span>
+      </div>
+    </div>
+  </div>
+  <div class="panel" style="margin-bottom:16px">
+    <div class="panel-title"><i class="ti ti-map-pin" style="color:#F59E0B"></i> Performance por Cidade</div>
+    ${cidades.map(c=>{
+      const count=MOCK.leads.filter(l=>l.cidade===c).length;
+      const fec=MOCK.leads.filter(l=>l.cidade===c&&l.status==='Fechado').length;
+      const rec=MOCK.leads.filter(l=>l.cidade===c&&l.status==='Fechado').reduce((a,l)=>a+l.valor,0);
+      return `<div class="funnel-bar" style="margin-bottom:14px">
+        <div style="width:100px;font-size:12px;color:#9CA3AF;flex-shrink:0">${c}</div>
+        <div class="funnel-track" style="height:10px"><div class="funnel-fill" style="width:${Math.round((count/maxC)*100)}%;background:#3B82F6"></div></div>
+        <div style="font-size:11px;font-family:'Space Mono',monospace;color:#9CA3AF;width:160px;text-align:right;white-space:nowrap">${count} leads · ${fec} fechados · R$ ${rec.toLocaleString()}</div>
+      </div>`;
+    }).join('')}
+  </div>
+  <div style="background:#1A1D24;border:1px solid rgba(255,255,255,0.06);border-radius:10px;overflow:hidden">
+    <table class="report-table" style="width:100%">
+      <thead><tr><th>Segmento</th><th>Leads</th><th>Reuniões</th><th>Fechamentos</th><th>Receita Est.</th><th>Ticket Médio</th></tr></thead>
+      <tbody>
+      ${segData.map(s=>`<tr>
+        <td><span class="seg-dot" style="background:${segCores[s.seg]}"></span>${s.seg}</td>
+        <td class="mono" style="color:#CBD5E1">${s.leads}</td>
+        <td class="mono" style="color:#CBD5E1">${s.reunioes}</td>
+        <td><span style="color:#10B981;font-family:'Space Mono',monospace">${s.fechamentos}</span></td>
+        <td style="color:#10B981;font-family:'Space Mono',monospace;font-size:12px">R$ ${s.receita.toLocaleString()}/mês</td>
+        <td class="mono" style="color:#CBD5E1">R$ ${s.ticket.toLocaleString()}</td>
+      </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function renderConfig(ca) {
+  ca.innerHTML=`<div style="max-width:520px">
+    <div style="background:#1A1D24;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:20px;margin-bottom:16px">
+      <div class="panel-title"><i class="ti ti-user" style="color:#3B82F6"></i> Perfil do Usuário</div>
+      <div class="modal-field"><label class="modal-label">Nome</label><input class="input-dark" value="Victor Hugo" id="cfg-nome"></div>
+      <div class="modal-field"><label class="modal-label">Agência</label><input class="input-dark" value="Nexus Digital Meta" id="cfg-agencia"></div>
+      <div class="modal-field"><label class="modal-label">E-mail</label><input class="input-dark" value="victor@nexusdigitalmeta.com.br" id="cfg-email"></div>
+      <div class="modal-field"><label class="modal-label">Cargo</label><input class="input-dark" value="Traffic Manager" id="cfg-cargo"></div>
+      <button class="btn-primary" id="btn-save-cfg"><i class="ti ti-check"></i> Salvar Perfil</button>
+    </div>
+    <div style="background:#1A1D24;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:20px;margin-bottom:16px">
+      <div class="panel-title"><i class="ti ti-map-pin" style="color:#10B981"></i> Cidades de Prospecção</div>
+      ${['Uberlândia','Uberaba','Araxá'].map(c=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+        <i class="ti ti-check" style="color:#10B981;font-size:14px"></i>
+        <span style="font-size:13px;color:#CBD5E1">${c}</span>
+        <span style="margin-left:auto;font-size:11px;color:#4B5563;font-family:'Space Mono',monospace">${MOCK.leads.filter(l=>l.cidade===c).length} leads</span>
+      </div>`).join('')}
+      <button class="btn-secondary" style="margin-top:12px"><i class="ti ti-plus"></i> Adicionar Cidade</button>
+    </div>
+    <div style="background:#1A1D24;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:20px">
+      <div class="panel-title"><i class="ti ti-tag" style="color:#F59E0B"></i> Segmentos Ativos</div>
+      ${Object.entries(segCores).map(([s,c])=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+        <span class="seg-dot" style="background:${c}"></span>
+        <span style="font-size:13px;color:#CBD5E1">${s}</span>
+        <span style="margin-left:auto;font-size:11px;color:#4B5563;font-family:'Space Mono',monospace">${MOCK.leads.filter(l=>l.segmento===s).length} leads</span>
+      </div>`).join('')}
+    </div>
+  </div>`;
+  document.getElementById('btn-save-cfg').addEventListener('click',()=>showToast('Perfil salvo com sucesso!'));
+}
+
+function showToast(msg) {
+  const t=document.getElementById('toast');
+  document.getElementById('toast-msg').textContent=msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+render();
+</script>
+</body>
+</html>
