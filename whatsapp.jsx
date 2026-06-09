@@ -81,6 +81,38 @@ const WA = {
   },
   setAuto(a) { localStorage.setItem(WA_LS.auto, JSON.stringify(a)); },
 
+  // ---- intervalo entre envios (anti-bloqueio) ----
+  intervalMin() { const c = WA.getCfg(); return c.intervalMin != null ? c.intervalMin : 5; },
+  intervalMs() { return Math.max(0, WA.intervalMin()) * 60000; },
+
+  // ---- fila de envio (espaça mensagens em massa) ----
+  getQueue() { try { return JSON.parse(localStorage.getItem("nexus_wa_queue") || "[]") || []; } catch (e) { return []; } },
+  setQueue(q) { localStorage.setItem("nexus_wa_queue", JSON.stringify(q)); },
+  clearQueue() { localStorage.removeItem("nexus_wa_queue"); localStorage.removeItem("nexus_wa_queue_last"); },
+  getLast() { try { return JSON.parse(localStorage.getItem("nexus_wa_queue_last") || "0"); } catch (e) { return 0; } },
+  setLast(t) { localStorage.setItem("nexus_wa_queue_last", JSON.stringify(t)); },
+  enqueue(ids, text) {
+    const q = WA.getQueue();
+    const add = ids.map((id) => ({
+      qid: "q" + Date.now() + "-" + id + "-" + Math.random().toString(16).slice(2, 6),
+      leadId: id, text,
+    }));
+    WA.setQueue(q.concat(add));
+    return add;
+  },
+  // enfileira itens com texto próprio por lead (ex.: import com vários segmentos)
+  enqueueItems(items) {
+    const q = WA.getQueue();
+    const add = items.map((it) => ({
+      qid: "q" + Date.now() + "-" + it.leadId + "-" + Math.random().toString(16).slice(2, 6),
+      leadId: it.leadId, text: it.text,
+    }));
+    WA.setQueue(q.concat(add));
+    return add;
+  },
+  // momento previsto para o próximo envio da fila
+  nextAt() { const q = WA.getQueue(); if (!q.length) return 0; return WA.getLast() + WA.intervalMs(); },
+
   render(body, lead) {
     if (!lead) return body;
     const firstName = (full) => {
@@ -232,6 +264,13 @@ function WhatsAppSendModal({ open, leads, templates, onClose, onSend }) {
         {missingPhone > 0 && (
           <div className="auth-msg err">{missingPhone} lead(s) sem número de WhatsApp — serão registrados, mas não teriam envio real.</div>
         )}
+
+        {count > 1 && WA.intervalMin() > 0 && (
+          <div className="wa-mode sim">
+            <Icon name="clock" size={15} />
+            <span>Para evitar bloqueios, as mensagens saem <strong>1 a cada {WA.intervalMin()} min</strong>. A 1ª vai agora e as demais entram na fila (que avança com o CRM aberto).</span>
+          </div>
+        )}
       </div>
 
       <div className="modal-foot">
@@ -241,6 +280,29 @@ function WhatsAppSendModal({ open, leads, templates, onClose, onSend }) {
         </button>
       </div>
     </Modal>
+  );
+}
+
+// ---- Floating queue status bar ---------------------------------------------
+function WhatsAppQueueBar({ info, onCancel }) {
+  const [, force] = wState(0);
+  wEffect(() => {
+    const t = setInterval(() => force((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const msLeft = Math.max(0, (info.nextAt || 0) - Date.now());
+  const mm = Math.floor(msLeft / 60000);
+  const ss = Math.floor((msLeft % 60000) / 1000);
+  const eta = info.nextAt ? (mm > 0 ? `${mm}min ${ss}s` : `${ss}s`) : "agora";
+  return (
+    <div className="wa-queue-bar">
+      <span className="wa-queue-icon"><Icon name="message-circle" size={16} /></span>
+      <div className="wa-queue-text">
+        <div className="wa-queue-title">{info.len} {info.len !== 1 ? "mensagens" : "mensagem"} na fila</div>
+        <div className="wa-queue-eta">próxima em {eta}</div>
+      </div>
+      <button className="wa-queue-cancel" onClick={onCancel} title="Cancelar fila"><Icon name="x" size={15} /></button>
+    </div>
   );
 }
 
@@ -323,6 +385,26 @@ function WhatsAppSettings({ onChanged }) {
       </Panel>
 
       <Panel title="Automação" subtitle="Disparo automático de prospecção">
+        <div className="wa-interval">
+          <div className="wa-interval-head">
+            <span className="settings-icon" style={{ background: COLORS.amber + "1A", color: COLORS.amber }}><Icon name="clock" size={17} /></span>
+            <div className="settings-text">
+              <div className="settings-title">Intervalo entre mensagens</div>
+              <div className="settings-desc">Espaça os envios em massa para evitar bloqueios no WhatsApp.</div>
+            </div>
+          </div>
+          <div className="wa-interval-opts">
+            {[0, 1, 2, 5, 10, 15].map((m) => (
+              <button key={m}
+                className={"wa-int-opt" + ((cfg.intervalMin != null ? cfg.intervalMin : 5) === m ? " active" : "")}
+                onClick={() => saveCfg({ ...cfg, intervalMin: m })}>
+                {m === 0 ? "Sem intervalo" : `${m} min`}
+              </button>
+            ))}
+          </div>
+          <p className="accent-note">Atual: {(cfg.intervalMin != null ? cfg.intervalMin : 5) === 0 ? "envio imediato (todas de uma vez)" : `1 mensagem a cada ${cfg.intervalMin != null ? cfg.intervalMin : 5} min`}. A fila avança enquanto o CRM estiver aberto.</p>
+        </div>
+
         <SettingsRow icon="message-circle" accent={COLORS.green}
           title="Enviar 1º contato ao criar lead"
           desc='Quando um lead novo entra com status "Novo", envia automaticamente o modelo escolhido.'
@@ -426,4 +508,4 @@ function WhatsAppTemplateModal({ tpl, open, onClose, onSave }) {
   );
 }
 
-Object.assign(window, { WA, WhatsAppSendModal, WhatsAppSettings, WA_DEFAULT_TEMPLATES });
+Object.assign(window, { WA, WhatsAppSendModal, WhatsAppSettings, WhatsAppQueueBar, WA_DEFAULT_TEMPLATES });

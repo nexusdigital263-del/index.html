@@ -3,6 +3,46 @@
 // ============================================================
 const PAGE_SIZE = 8;
 
+// ---- CSV export ------------------------------------------------------------
+function waDigits(raw) {
+  let d = (raw || "").replace(/\D/g, "");
+  if (!d) return "";
+  if (d.length <= 11) d = "55" + d; // adiciona DDI Brasil se faltar
+  return d;
+}
+function csvCell(v) {
+  const s = (v == null ? "" : String(v)).replace(/"/g, '""');
+  return '"' + s + '"';
+}
+function exportLeadsCSV(list, sufixo) {
+  if (!list || !list.length) { if (window.toast) toast("Nenhum lead para exportar", "info"); return; }
+  const cols = [
+    "Empresa", "Contato", "Cargo", "WhatsApp", "Link WhatsApp",
+    "Segmento", "Cidade", "Status", "Responsável", "Valor mensal (R$)",
+    "Último contato", "Próxima ação",
+  ];
+  const lines = [cols.map(csvCell).join(";")];
+  list.forEach((l) => {
+    const dig = waDigits(l.whatsapp);
+    const dono = (window.userInfo ? userInfo(l.dono).name : l.dono);
+    lines.push([
+      l.empresa, l.responsavel, l.cargo, l.whatsapp, dig ? "https://wa.me/" + dig : "",
+      l.segmento, l.cidade, l.status, dono, l.valor,
+      l.ultimoContato, l.proximaAcao,
+    ].map(csvCell).join(";"));
+  });
+  const csv = "\uFEFF" + lines.join("\r\n"); // BOM p/ acentos no Excel
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const date = "2026-06-09";
+  a.href = url;
+  a.download = `leads-nexuscrm${sufixo ? "-" + sufixo : ""}-${date}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  if (window.toast) toast(`${list.length} lead${list.length !== 1 ? "s" : ""} exportado${list.length !== 1 ? "s" : ""} (CSV)`, "success");
+}
+
 function CheckBox({ checked, indeterminate, onChange, title }) {
   return (
     <button className={"lead-check" + (checked ? " checked" : "") + (indeterminate ? " indet" : "")}
@@ -13,8 +53,9 @@ function CheckBox({ checked, indeterminate, onChange, title }) {
   );
 }
 
-function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete, canCreate, onBulkWhatsApp }) {
+function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete, canCreate, onBulkWhatsApp, onImportLeads }) {
   const canSelect = canDelete || canCreate;
+  const [importOpen, setImportOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [segFilter, setSegFilter] = useState("Todos");
   const [statusFilter, setStatusFilter] = useState("Todos");
@@ -93,7 +134,25 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete,
         <Select value={statusFilter} onChange={setStatusFilter} options={["Todos", ...STATUS]} />
         <Select value={cityFilter} onChange={setCityFilter} options={["Todas", ...CITIES]} />
         <div className="filter-count">{filtered.length} de {leads.length}</div>
+        {canCreate && (
+          <button className="btn btn-ghost btn-sm export-btn" title="Importar leads de uma planilha CSV"
+            onClick={() => setImportOpen(true)}>
+            <Icon name="download" size={15} className="import-icon-flip" /> Importar
+          </button>
+        )}
+        <button className="btn btn-ghost btn-sm export-btn" disabled={!filtered.length}
+          title="Exportar os leads filtrados para CSV (Excel)"
+          onClick={() => exportLeadsCSV(filtered, "filtrados")}>
+          <Icon name="download" size={15} /> Exportar
+        </button>
       </div>
+
+      {canCreate && (
+        <ImportLeadsModal open={importOpen} onClose={() => setImportOpen(false)}
+          autoOn={!!(window.WA && WA.getAuto().onNew)}
+          intervalMin={window.WA ? WA.intervalMin() : 0}
+          onImport={(rows) => onImportLeads && onImportLeads(rows)} />
+      )}
 
       {canSelect && selectedInFilter > 0 && (
         <div className="bulk-bar">
@@ -106,6 +165,12 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete,
               <button className="bulk-link" onClick={toggleAll}>Selecionar todos os {filtered.length}</button>
             )}
             <button className="bulk-link" onClick={clearSelection}>Limpar seleção</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => {
+              const ids = selectedIds();
+              exportLeadsCSV(filtered.filter((l) => ids.includes(l.id)), "selecionados");
+            }}>
+              <Icon name="download" size={15} /> Exportar
+            </button>
             {canCreate && (
               <button className="btn btn-wa btn-sm" onClick={bulkWhatsApp}>
                 <Icon name="message-circle" size={15} /> Enviar WhatsApp

@@ -259,24 +259,78 @@ function App() {
   }, [sync]);
 
   // ---- WhatsApp send + automation (defined before createLead for ordering) ----
+  // ---- WhatsApp send + queue (intervalo entre envios) ----
+  const [queueInfo, setQueueInfo] = useState(() => ({ len: WA.getQueue().length, nextAt: WA.nextAt() }));
+
+  // envia UMA mensagem (real ou simulada) e registra na timeline do lead
+  const sendOne = useCallback((id, text) => {
+    const lead = leadsRef.current.find((l) => l.id === id);
+    if (!lead) return false;
+    const rendered = WA.render(text, lead);
+    WA.send(lead, rendered);
+    const it = { id: uid(), data: TODAY, tipo: "WhatsApp", nota: rendered };
+    const interacoes = [...lead.interacoes, it];
+    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, interacoes, ultimoContato: TODAY } : l));
+    if (REMOTE) sync(() => SB.patchLead(Number(id), { interacoes, ultimoContato: TODAY }));
+    return true;
+  }, [sync]);
+
+  // processa 1 item da fila se já passou o intervalo desde o último envio
+  const processQueue = useCallback(() => {
+    const q = WA.getQueue();
+    if (!q.length) { setQueueInfo({ len: 0, nextAt: 0 }); return; }
+    const due = Date.now() >= WA.getLast() + WA.intervalMs();
+    if (!due) { setQueueInfo({ len: q.length, nextAt: WA.getLast() + WA.intervalMs() }); return; }
+    const head = q[0];
+    const rest = q.slice(1);
+    WA.setQueue(rest);
+    const sent = sendOne(head.leadId, head.text);
+    if (sent) WA.setLast(Date.now());
+    setQueueInfo({ len: rest.length, nextAt: rest.length ? Date.now() + WA.intervalMs() : 0 });
+  }, [sendOne]);
+
+  // tick: avança a fila enquanto o app está aberto
+  useEffect(() => {
+    processQueue();
+    const t = setInterval(processQueue, 15000);
+    const onVis = () => { if (!document.hidden) processQueue(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
+  }, [processQueue]);
+
+  const cancelQueue = useCallback(() => {
+    WA.clearQueue();
+    setQueueInfo({ len: 0, nextAt: 0 });
+    toast("Fila de envios cancelada", "info");
+  }, []);
+
+  // dispara para 1+ leads, respeitando o intervalo configurado
   const logWhatsApp = useCallback((ids, text) => {
     const cur = leadsRef.current;
+    const valid = ids.filter((id) => cur.find((l) => l.id === id));
+    if (!valid.length) return null;
     const conn = WA.isConnected();
-    const byId = {};
-    ids.forEach((id) => {
-      const lead = cur.find((l) => l.id === id);
-      if (!lead) return;
-      const rendered = WA.render(text, lead);
-      WA.send(lead, rendered); // simulated (or real if endpoint configured)
-      const it = { id: uid(), data: TODAY, tipo: "WhatsApp", nota: rendered };
-      byId[id] = [...lead.interacoes, it];
-    });
-    const keys = Object.keys(byId);
-    if (!keys.length) return null;
-    setLeads((prev) => prev.map((l) => byId[l.id] ? { ...l, interacoes: byId[l.id], ultimoContato: TODAY } : l));
-    if (REMOTE) keys.forEach((id) => sync(() => SB.patchLead(Number(id), { interacoes: byId[id], ultimoContato: TODAY })));
-    return { count: keys.length, conn };
-  }, [sync]);
+    const gapMs = WA.intervalMs();
+
+    if (gapMs === 0) {
+      valid.forEach((id) => sendOne(id, text));
+      WA.setLast(Date.now());
+      return { count: valid.length, conn, queued: 0, interval: 0 };
+    }
+
+    // 1ª mensagem agora (se já passou o intervalo desde o último envio); resto na fila
+    let sentNow = 0;
+    let toQueue = valid;
+    if (Date.now() >= WA.getLast() + gapMs) {
+      sendOne(valid[0], text);
+      WA.setLast(Date.now());
+      sentNow = 1;
+      toQueue = valid.slice(1);
+    }
+    if (toQueue.length) WA.enqueue(toQueue, text);
+    setQueueInfo({ len: WA.getQueue().length, nextAt: WA.nextAt() });
+    return { count: valid.length, conn, queued: toQueue.length, sentNow, interval: WA.intervalMin() };
+  }, [sendOne]);
 
   const autoWhatsApp = useCallback((lead) => {
     const auto = WA.getAuto();
@@ -320,6 +374,64 @@ function App() {
     if (cur) toast(`Lead "${cur.empresa}" removido`, "error");
     if (REMOTE) sync(() => SB.deleteLead(id));
   }, [sync]);
+
+  // ---- import de leads (CSV) + automação de 1º contato em massa ----
+  const bulkAutoWhatsApp = useCallback((createdLeads) => {
+    const auto = WA.getAuto();
+    if (!auto.onNew) return;
+    const tpls = WA.getTemplates();
+    const novos = createdLeads.filter((l) => l.status === "Novo");
+    const items = novos.map((lead) => {
+      let tpl = (auto.templateId && auto.templateId !== "auto") ? tpls.find((t) => t.id === auto.templateId) : null;
+      if (!tpl) tpl = WA.templateForLead(lead, tpls);
+      return tpl ? { leadId: lead.id, text: tpl.body } : null;
+    }).filter(Boolean);
+    if (!items.length) return;
+    const gapMs = WA.intervalMs();
+    if (gapMs === 0) {
+      items.forEach((it) => sendOne(it.leadId, it.text));
+      WA.setLast(Date.now());
+    } else {
+      let queued = items;
+      if (Date.now() >= WA.getLast() + gapMs) {
+        sendOne(items[0].leadId, items[0].text);
+        WA.setLast(Date.now());
+        queued = items.slice(1);
+      }
+      if (queued.length) WA.enqueueItems(queued);
+      setQueueInfo({ len: WA.getQueue().length, nextAt: WA.nextAt() });
+    }
+    toast(`Prospecção iniciada: ${items.length} mensagem(ns) de 1º contato${gapMs ? ` · 1 a cada ${WA.intervalMin()} min` : ""}`, "info");
+  }, [sendOne]);
+
+  const importLeads = useCallback(async (rows) => {
+    const dono = currentUser ? currentUser.id : "CM";
+    const prepared = rows.map((form) => ({
+      ...form, dono, ultimoContato: TODAY,
+      interacoes: [{ id: uid(), data: TODAY, tipo: "Ligação", nota: "Lead importado via planilha." }],
+    }));
+    let created = [];
+    if (REMOTE) {
+      try {
+        for (const base of prepared) {
+          const row = await SB.insertLead(base);
+          created.push(row);
+        }
+      } catch (e) {
+        console.error(e);
+        if (created.length) setLeads((prev) => [...created.slice().reverse(), ...prev]);
+        toast(`Importação parcial: ${created.length} de ${prepared.length}. Erro no Supabase.`, "error");
+        return;
+      }
+      setLeads((prev) => [...created.slice().reverse(), ...prev]);
+    } else {
+      let maxId = leadsRef.current.reduce((m, l) => Math.max(m, l.id), 0);
+      created = prepared.map((b) => ({ ...b, id: ++maxId }));
+      setLeads((prev) => [...created.slice().reverse(), ...prev]);
+    }
+    toast(`${created.length} lead${created.length !== 1 ? "s" : ""} importado${created.length !== 1 ? "s" : ""}`, "success");
+    setTimeout(() => bulkAutoWhatsApp(created), 120);
+  }, [currentUser, bulkAutoWhatsApp]);
 
   const deleteLeads = useCallback((ids) => {
     const set = new Set(ids);
@@ -371,7 +483,14 @@ function App() {
   const closeWhatsApp = useCallback(() => setWaModal({ open: false, leadIds: [] }), []);
   const sendWhatsApp = useCallback((ids, text) => {
     const r = logWhatsApp(ids, text);
-    if (r) toast(`Mensagem ${r.conn ? "enviada" : "registrada (simulação)"} para ${r.count} lead${r.count !== 1 ? "s" : ""}`, r.conn ? "success" : "info");
+    if (!r) return;
+    if (r.queued > 0) {
+      const base = r.conn ? "" : " (simulação)";
+      const firstTxt = r.sentNow ? "1 enviada agora" : "0 enviada agora";
+      toast(`${firstTxt}, ${r.queued} na fila${base} · 1 a cada ${r.interval} min`, "info");
+    } else {
+      toast(`Mensagem ${r.conn ? "enviada" : "registrada (simulação)"} para ${r.count} lead${r.count !== 1 ? "s" : ""}`, r.conn ? "success" : "info");
+    }
   }, [logWhatsApp]);
 
   // ---- auth + users ----
@@ -485,6 +604,7 @@ function App() {
           {hasAccess && page === "dashboard" && <Dashboard leads={visibleLeads} onOpenLead={openLead} />}
           {hasAccess && page === "leads" && <LeadsTable leads={visibleLeads} onOpenLead={openLead}
             canDelete={canDelete} canCreate={canCreate} onBulkWhatsApp={openWhatsAppBulk}
+            onImportLeads={importLeads}
             onDeleteLead={deleteLead} onDeleteLeads={deleteLeads} />}
           {hasAccess && page === "kanban" && <Kanban leads={visibleLeads} onOpenLead={openLead} onMoveLead={moveLead} />}
           {hasAccess && page === "agenda" && <Agenda tasks={visibleTasks} leads={visibleLeads} onToggleTask={toggleTask} onAddTask={addTask} onDeleteTask={deleteTask} />}
@@ -509,6 +629,8 @@ function App() {
       <WhatsAppSendModal open={waModal.open}
         leads={waModal.leadIds.map((id) => leads.find((l) => l.id === id)).filter(Boolean)}
         onClose={closeWhatsApp} onSend={(ids, text) => sendWhatsApp(ids, text)} />
+
+      {queueInfo.len > 0 && <WhatsAppQueueBar info={queueInfo} onCancel={cancelQueue} />}
 
       <LeadFormModal lead={editLead} mode="edit" open={editLead != null}
         owners={ownerOptions}
