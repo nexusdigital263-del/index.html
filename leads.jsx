@@ -13,7 +13,8 @@ function CheckBox({ checked, indeterminate, onChange, title }) {
   );
 }
 
-function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete }) {
+function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete, canCreate, onBulkWhatsApp }) {
+  const canSelect = canDelete || canCreate;
   const [search, setSearch] = useState("");
   const [segFilter, setSegFilter] = useState("Todos");
   const [statusFilter, setStatusFilter] = useState("Todos");
@@ -66,13 +67,18 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete 
     return next;
   });
   const clearSelection = () => setSelected(new Set());
+  const selectedIds = () => filteredIds.filter((id) => selected.has(id));
   const bulkDelete = () => {
-    const ids = filteredIds.filter((id) => selected.has(id));
+    const ids = selectedIds();
     if (!ids.length) return;
     if (window.confirm(`Remover ${ids.length} lead${ids.length !== 1 ? "s" : ""} selecionado${ids.length !== 1 ? "s" : ""}? Esta ação não pode ser desfeita.`)) {
       onDeleteLeads(ids);
       clearSelection();
     }
+  };
+  const bulkWhatsApp = () => {
+    const ids = selectedIds();
+    if (ids.length && onBulkWhatsApp) onBulkWhatsApp(ids);
   };
 
   return (
@@ -89,7 +95,7 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete 
         <div className="filter-count">{filtered.length} de {leads.length}</div>
       </div>
 
-      {canDelete && selectedInFilter > 0 && (
+      {canSelect && selectedInFilter > 0 && (
         <div className="bulk-bar">
           <div className="bulk-info">
             <CheckBox checked={allSelected} indeterminate={someSelected} onChange={toggleAll} title="Selecionar todos" />
@@ -100,9 +106,16 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete 
               <button className="bulk-link" onClick={toggleAll}>Selecionar todos os {filtered.length}</button>
             )}
             <button className="bulk-link" onClick={clearSelection}>Limpar seleção</button>
-            <button className="btn btn-danger btn-sm" onClick={bulkDelete}>
-              <Icon name="trash" size={15} /> Excluir selecionados
-            </button>
+            {canCreate && (
+              <button className="btn btn-wa btn-sm" onClick={bulkWhatsApp}>
+                <Icon name="message-circle" size={15} /> Enviar WhatsApp
+              </button>
+            )}
+            {canDelete && (
+              <button className="btn btn-danger btn-sm" onClick={bulkDelete}>
+                <Icon name="trash" size={15} /> Excluir
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -111,7 +124,7 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete 
         <table className="data-table">
           <thead>
             <tr>
-              {canDelete && (
+              {canSelect && (
                 <th className="col-check">
                   <CheckBox checked={allSelected} indeterminate={someSelected} onChange={toggleAll}
                     title={allSelected ? "Desmarcar todos" : "Selecionar todos"} />
@@ -131,7 +144,7 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete 
           <tbody>
             {rows.map((l) => (
               <tr key={l.id} className={"data-row" + (selected.has(l.id) ? " row-selected" : "")} onClick={() => onOpenLead(l.id)}>
-                {canDelete && (
+                {canSelect && (
                   <td className="col-check" onClick={(e) => e.stopPropagation()}>
                     <CheckBox checked={selected.has(l.id)} onChange={() => toggleOne(l.id)} title="Selecionar lead" />
                   </td>
@@ -200,7 +213,7 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete 
 }
 
 // ---- Lead detail drawer content -------------------------------------------
-function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDelete }) {
+function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDelete, canCreate, onWhatsApp }) {
   const [tipo, setTipo] = useState("Ligação");
   const [nota, setNota] = useState("");
   if (!lead) return null;
@@ -229,6 +242,11 @@ function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDele
           <PriorityBadge priority={lead.prioridade} />
           <span className="drawer-valor mono">{fmtBRL(lead.valor)}<small>/mês</small></span>
         </div>
+        {canCreate && (
+          <button className="btn btn-wa btn-block drawer-wa-btn" onClick={() => onWhatsApp(lead.id)}>
+            <Icon name="message-circle" size={16} /> Enviar WhatsApp
+          </button>
+        )}
       </div>
 
       <div className="drawer-body">

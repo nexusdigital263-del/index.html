@@ -33,6 +33,8 @@ function Settings({ accent, onAccent, onReset, onLogout, user, remote, onConnect
 
           {isAdmin && <SupabasePanel remote={remote} onConnect={onConnect} onDisconnect={onDisconnect} />}
 
+          {isAdmin && <WhatsAppSettings />}
+
           <Panel title="Aparência" subtitle="Cor de destaque da interface">
             <div className="accent-row">
               <div className="accent-picker">

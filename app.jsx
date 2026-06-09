@@ -169,6 +169,7 @@ function App() {
   const [editLead, setEditLead] = useState(null);
   const [newLeadOpen, setNewLeadOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [waModal, setWaModal] = useState({ open: false, leadIds: [] });
 
   // refs mirror latest state so handlers can read current values without re-binding
   const leadsRef = useRef(leads); useEffect(() => { leadsRef.current = leads; }, [leads]);
@@ -257,6 +258,37 @@ function App() {
     if (REMOTE) sync(() => SB.patchLead(form.id, form));
   }, [sync]);
 
+  // ---- WhatsApp send + automation (defined before createLead for ordering) ----
+  const logWhatsApp = useCallback((ids, text) => {
+    const cur = leadsRef.current;
+    const conn = WA.isConnected();
+    const byId = {};
+    ids.forEach((id) => {
+      const lead = cur.find((l) => l.id === id);
+      if (!lead) return;
+      const rendered = WA.render(text, lead);
+      WA.send(lead, rendered); // simulated (or real if endpoint configured)
+      const it = { id: uid(), data: TODAY, tipo: "WhatsApp", nota: rendered };
+      byId[id] = [...lead.interacoes, it];
+    });
+    const keys = Object.keys(byId);
+    if (!keys.length) return null;
+    setLeads((prev) => prev.map((l) => byId[l.id] ? { ...l, interacoes: byId[l.id], ultimoContato: TODAY } : l));
+    if (REMOTE) keys.forEach((id) => sync(() => SB.patchLead(Number(id), { interacoes: byId[id], ultimoContato: TODAY })));
+    return { count: keys.length, conn };
+  }, [sync]);
+
+  const autoWhatsApp = useCallback((lead) => {
+    const auto = WA.getAuto();
+    if (!auto.onNew || lead.status !== "Novo") return;
+    const tpls = WA.getTemplates();
+    let tpl = (auto.templateId && auto.templateId !== "auto") ? tpls.find((t) => t.id === auto.templateId) : null;
+    if (!tpl) tpl = WA.templateForLead(lead, tpls);
+    if (!tpl) return;
+    const r = logWhatsApp([lead.id], tpl.body);
+    if (r) toast(`WhatsApp de 1º contato ${r.conn ? "enviado" : "(simulação)"} → ${lead.empresa}`, "info");
+  }, [logWhatsApp]);
+
   const createLead = useCallback((form) => {
     const dono = (currentUser && !can(currentUser.role, "viewAll")) ? currentUser.id : form.dono;
     const base = {
@@ -265,14 +297,20 @@ function App() {
     };
     if (REMOTE) {
       SB.insertLead(base)
-        .then((row) => { setLeads((prev) => [row, ...prev]); toast(`Lead "${row.empresa}" criado`, "success"); })
+        .then((row) => {
+          setLeads((prev) => [row, ...prev]);
+          toast(`Lead "${row.empresa}" criado`, "success");
+          setTimeout(() => autoWhatsApp(row), 50);
+        })
         .catch((e) => { console.error(e); toast("Erro ao criar lead no Supabase", "error"); });
     } else {
       const id = leadsRef.current.reduce((m, l) => Math.max(m, l.id), 0) + 1;
-      setLeads((prev) => [{ ...base, id }, ...prev]);
+      const newLead = { ...base, id };
+      setLeads((prev) => [newLead, ...prev]);
       toast(`Lead "${form.empresa}" criado`, "success");
+      setTimeout(() => autoWhatsApp(newLead), 50);
     }
-  }, [currentUser]);
+  }, [currentUser, autoWhatsApp]);
 
   const deleteLead = useCallback((id) => {
     const cur = leadsRef.current.find((l) => l.id === id);
@@ -327,6 +365,14 @@ function App() {
     setLeads(LEADS); setTasks(TASKS);
     toast("Dados restaurados ao padrão", "info");
   }, []);
+
+  // ---- WhatsApp ----
+  const openWhatsAppBulk = useCallback((ids) => setWaModal({ open: true, leadIds: ids }), []);
+  const closeWhatsApp = useCallback(() => setWaModal({ open: false, leadIds: [] }), []);
+  const sendWhatsApp = useCallback((ids, text) => {
+    const r = logWhatsApp(ids, text);
+    if (r) toast(`Mensagem ${r.conn ? "enviada" : "registrada (simulação)"} para ${r.count} lead${r.count !== 1 ? "s" : ""}`, r.conn ? "success" : "info");
+  }, [logWhatsApp]);
 
   // ---- auth + users ----
   const loginDemo = useCallback((id) => { setCurrentId(id); setPage("dashboard"); setCollapsed(false); }, []);
@@ -438,7 +484,8 @@ function App() {
           {!hasAccess && <NoAccess />}
           {hasAccess && page === "dashboard" && <Dashboard leads={visibleLeads} onOpenLead={openLead} />}
           {hasAccess && page === "leads" && <LeadsTable leads={visibleLeads} onOpenLead={openLead}
-            canDelete={canDelete} onDeleteLead={deleteLead} onDeleteLeads={deleteLeads} />}
+            canDelete={canDelete} canCreate={canCreate} onBulkWhatsApp={openWhatsAppBulk}
+            onDeleteLead={deleteLead} onDeleteLeads={deleteLeads} />}
           {hasAccess && page === "kanban" && <Kanban leads={visibleLeads} onOpenLead={openLead} onMoveLead={moveLead} />}
           {hasAccess && page === "agenda" && <Agenda tasks={visibleTasks} leads={visibleLeads} onToggleTask={toggleTask} onAddTask={addTask} onDeleteTask={deleteTask} />}
           {hasAccess && page === "reports" && <Reports leads={visibleLeads} />}
@@ -453,10 +500,15 @@ function App() {
       <Drawer open={openLeadId != null} onClose={closeDrawer}>
         <LeadDetail lead={openLeadObj} onClose={closeDrawer}
           onAddInteraction={addInteraction}
-          canDelete={canDelete}
+          canDelete={canDelete} canCreate={canCreate}
+          onWhatsApp={(id) => openWhatsAppBulk([id])}
           onDelete={deleteLead}
           onEdit={(l) => { setEditLead(l); setOpenLeadId(null); }} />
       </Drawer>
+
+      <WhatsAppSendModal open={waModal.open}
+        leads={waModal.leadIds.map((id) => leads.find((l) => l.id === id)).filter(Boolean)}
+        onClose={closeWhatsApp} onSend={(ids, text) => sendWhatsApp(ids, text)} />
 
       <LeadFormModal lead={editLead} mode="edit" open={editLead != null}
         owners={ownerOptions}

@@ -563,3 +563,41 @@ input[type="date"].input, input[type="time"].input { color-scheme: dark; }
 .field-hint { font-size: 11.5px; color: var(--text-3); margin-top: 5px; }
 .field-hint.err { color: var(--amber); }
 .field-hint strong { color: var(--text-2); font-weight: 600; }
+
+/* ============================================================ WhatsApp */
+:root { --wa: #25D366; --wa-dark: #1da851; }
+.btn-wa { background: var(--wa); color: #052e16; border-color: var(--wa); font-weight: 700; }
+.btn-wa:hover { background: var(--wa-dark); color: #fff; }
+.drawer-wa-btn { margin-top: 14px; justify-content: center; }
+.conn-badge.off { color: var(--amber); background: rgba(245,158,11,0.12); }
+
+.wa-mode { display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px; border-radius: var(--r-sm); font-size: 12.5px; line-height: 1.5; }
+.wa-mode svg { flex-shrink: 0; margin-top: 1px; }
+.wa-mode.sim { background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,0.25); color: var(--text-2); }
+.wa-mode.sim svg { color: var(--amber); }
+.wa-mode.live { background: rgba(37,211,102,0.10); border: 1px solid rgba(37,211,102,0.3); color: var(--text-2); }
+.wa-mode.live svg { color: var(--wa); }
+.wa-mode strong { color: var(--text); font-weight: 600; }
+
+.wa-vars { font-family: 'Space Mono', monospace; font-size: 10.5px; color: var(--text-3); font-weight: 400; margin-left: 6px; }
+.wa-preview { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 13px; }
+.wa-preview-label { font-size: 11.5px; color: var(--text-3); margin-bottom: 8px; }
+.wa-preview-label strong { color: var(--text-2); }
+.wa-bubble { background: #075E54; background: linear-gradient(135deg, #128C7E, #075E54); color: #fff; padding: 10px 13px; border-radius: 4px 12px 12px 12px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
+
+.wa-auto-tpl { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.wa-auto-tpl .field-label { margin-bottom: 2px; }
+.wa-check-row { display: flex; align-items: center; gap: 11px; font-size: 13px; color: var(--text-2); line-height: 1.4; }
+.wa-check-row strong { color: var(--text); }
+
+.wa-tpl-list { display: flex; flex-direction: column; gap: 10px; }
+.wa-tpl { display: flex; gap: 12px; align-items: flex-start; padding: 13px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); }
+.wa-tpl-main { flex: 1; min-width: 0; }
+.wa-tpl-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 6px; }
+.wa-tpl-name { font-size: 13.5px; font-weight: 700; }
+.wa-tpl-body { font-size: 12.5px; color: var(--text-3); line-height: 1.5; }
+.wa-tpl-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.wa-chip { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--wa); background: rgba(37,211,102,0.14); padding: 2px 7px; border-radius: 999px; }
+.wa-test { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.wa-test-row { display: flex; gap: 10px; margin-top: 7px; }
+.wa-test-row .input { flex: 1; }
