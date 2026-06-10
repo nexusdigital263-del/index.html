@@ -177,6 +177,31 @@ const WA = {
     return { metaName: tpl.metaName, metaLang: tpl.metaLang || "pt_BR", vars: tpl.vars || [] };
   },
 
+  // ---- config compartilhada (Supabase) ----
+  // exporta a config (sem segredos — token fica no servidor) para sincronizar
+  exportSettings() {
+    const c = WA.getCfg();
+    return {
+      cfg: { live: !!c.live, intervalMin: (c.intervalMin != null ? c.intervalMin : 5), fn: c.fn || "" },
+      auto: WA.getAuto(),
+      templates: WA.getTemplates(),
+      tplVer: WA_TPL_VERSION,
+    };
+  },
+  // aplica a config recebida do servidor no localStorage deste navegador
+  importSettings(s) {
+    if (!s) return;
+    if (s.cfg) {
+      const cur = WA.getCfg();
+      WA.setCfg({ ...cur, live: !!s.cfg.live, intervalMin: s.cfg.intervalMin != null ? s.cfg.intervalMin : 5, fn: s.cfg.fn || cur.fn || "" });
+    }
+    if (s.auto) WA.setAuto(s.auto);
+    if (Array.isArray(s.templates) && s.templates.length) {
+      localStorage.setItem(WA_LS.tpl, JSON.stringify(s.templates));
+      localStorage.setItem("nexus_wa_tpl_ver", String(s.tplVer || WA_TPL_VERSION));
+    }
+  },
+
   // pick the best template for a lead's segment (primeiro contato)
   templateForLead(lead, templates) {
     const list = templates || WA.getTemplates();
@@ -493,6 +518,16 @@ function WhatsAppSettings({ onChanged }) {
             <p className="accent-note">"Automático por segmento" escolhe o modelo certo conforme o segmento do lead.</p>
           </div>
         )}
+
+        <div className="wa-share">
+          <div className="wa-share-text">
+            <strong>Configuração compartilhada</strong>
+            <span>Esta config (automação, envio real, intervalo e modelos) vale para todos os usuários. Salve para sincronizar com a equipe.</span>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={() => { if (onChanged) { onChanged(); if (window.toast) toast("Configuração salva para toda a equipe", "success"); } }}>
+            <Icon name="check" size={14} /> Salvar para a equipe
+          </button>
+        </div>
       </Panel>
 
       <Panel title="Modelos de mensagem" subtitle="Edite os textos da prospecção"

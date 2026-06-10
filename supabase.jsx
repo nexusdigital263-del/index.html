@@ -224,6 +224,26 @@
     if (error) throw error;
   }
 
+  // ---- shared settings (config compartilhada entre todos os usuários) -------
+  async function getSettings(key) {
+    const c = await ensureClient();
+    if (!c) return null;
+    const { data, error } = await c.from("app_settings").select("value").eq("id", key).maybeSingle();
+    if (error) {
+      // tabela ainda não criada → ignora (fallback p/ localStorage)
+      if (error.code === "42P01" || /relation .* does not exist/i.test(error.message || "")) return null;
+      return null;
+    }
+    return data ? data.value : null;
+  }
+  async function saveSettings(key, value) {
+    const c = await ensureClient();
+    if (!c) return { ok: false };
+    const { error } = await c.from("app_settings").upsert({ id: key, value, updated_at: new Date().toISOString() });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }
+
   // ---- connection test -----------------------------------------------------
   async function testConnection(cfg) {
     try {
@@ -254,6 +274,7 @@
     fetchLeads, markLeadRead,
     insertTask, patchTask, deleteTask,
     updateProfile, deleteProfile,
+    getSettings, saveSettings,
     leadFromRow, taskFromRow, profileFromRow, TODAY,
   };
 })();

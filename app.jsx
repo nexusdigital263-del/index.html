@@ -207,7 +207,20 @@ function App() {
     const data = await SB.fetchAll();
     window.__users = data.users;
     setUsers(data.users); setLeads(data.leads); setTasks(data.tasks);
+    // carrega a config de WhatsApp compartilhada (automação, envio real, modelos)
+    try {
+      const waS = await SB.getSettings("whatsapp");
+      if (waS) WA.importSettings(waS);
+    } catch (e) { console.error(e); }
     setCurrentId(profile.id);
+  }, []);
+
+  // empurra a config de WhatsApp para o Supabase (compartilha com toda a equipe)
+  const pushWaSettings = useCallback(() => {
+    if (!REMOTE) return;
+    Promise.resolve(SB.saveSettings("whatsapp", WA.exportSettings())).then((r) => {
+      if (r && r.ok === false) toast("Não foi possível salvar a config compartilhada (rode o SQL de settings).", "error");
+    }).catch(() => {});
   }, []);
 
   // ---- remote bootstrap: restore session on load ----
@@ -679,6 +692,7 @@ function App() {
             remote={REMOTE} onAdd={addUser} onUpdate={updateUser} onRemove={removeUser} />}
           {hasAccess && page === "settings" && <Settings accent={accent} onAccent={setAccent} onReset={resetData}
             onLogout={logout} user={currentUser} remote={REMOTE}
+            onWaChanged={pushWaSettings}
             onConnect={connectSupabase} onDisconnect={disconnectSupabase} />}
         </div>
       </main>

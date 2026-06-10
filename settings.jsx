@@ -3,7 +3,7 @@
 // ============================================================
 const { useState: sState } = React;
 
-function Settings({ accent, onAccent, onReset, onLogout, user, remote, onConnect, onDisconnect }) {
+function Settings({ accent, onAccent, onReset, onLogout, user, remote, onConnect, onDisconnect, onWaChanged }) {
   const accents = [COLORS.blue, COLORS.purple, COLORS.green, COLORS.cyan, COLORS.amber];
   const ACCENT_NAMES = {
     [COLORS.blue]: "Azul elétrico", [COLORS.purple]: "Roxo", [COLORS.green]: "Verde",
@@ -33,7 +33,7 @@ function Settings({ accent, onAccent, onReset, onLogout, user, remote, onConnect
 
           {isAdmin && <SupabasePanel remote={remote} onConnect={onConnect} onDisconnect={onDisconnect} />}
 
-          {isAdmin && <WhatsAppSettings />}
+          {isAdmin && <WhatsAppSettings onChanged={onWaChanged} />}
 
           <Panel title="Aparência" subtitle="Cor de destaque da interface">
             <div className="accent-row">
