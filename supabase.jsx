@@ -65,6 +65,7 @@
     responsavel: "responsavel", cargo: "cargo", whatsapp: "whatsapp", status: "status",
     valor: "valor", prioridade: "prioridade", dono: "dono", interacoes: "interacoes",
     diasNoFunil: "dias_no_funil", ultimoContato: "ultimo_contato", proximaAcao: "proxima_acao",
+    unread: "unread",
   };
   function leadToRow(l) {
     const row = {};
@@ -78,7 +79,7 @@
       responsavel: r.responsavel, cargo: r.cargo, whatsapp: r.whatsapp, status: r.status,
       valor: Number(r.valor), prioridade: r.prioridade, dono: r.dono,
       diasNoFunil: r.dias_no_funil, ultimoContato: r.ultimo_contato, proximaAcao: r.proxima_acao,
-      interacoes: r.interacoes || [],
+      interacoes: r.interacoes || [], unread: Number(r.unread) || 0,
     };
   }
   const taskToRow = (t) => ({
@@ -161,6 +162,18 @@
     if (error) throw error;
     return leadFromRow(data);
   }
+  // só os leads (para polling de respostas recebidas)
+  async function fetchLeads() {
+    const c = await ensureClient();
+    const { data, error } = await c.from("leads").select("*").order("id", { ascending: false });
+    if (error) throw error;
+    return (data || []).map(leadFromRow);
+  }
+  async function markLeadRead(id) {
+    const c = await ensureClient();
+    const { error } = await c.from("leads").update({ unread: 0 }).eq("id", id);
+    if (error) throw error;
+  }
   async function patchLead(id, fields) {
     const c = await ensureClient();
     const row = {};
@@ -238,6 +251,7 @@
     isConfigured, isBuiltin, getCfg, setCfg, clearCfg, ensureClient, testConnection,
     signIn, signUp, signOut, sessionProfile,
     fetchAll, insertLead, patchLead, deleteLead, deleteLeads,
+    fetchLeads, markLeadRead,
     insertTask, patchTask, deleteTask,
     updateProfile, deleteProfile,
     leadFromRow, taskFromRow, profileFromRow, TODAY,

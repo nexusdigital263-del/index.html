@@ -29,33 +29,42 @@ function SettingsRow({ icon, title, desc, control, accent }) {
 }
 
 const WA_LS = { cfg: "nexus_wa_cfg", tpl: "nexus_wa_tpl", auto: "nexus_wa_auto" };
+const WA_TPL_VERSION = 3; // bump → migra modelos padrão preservando os personalizados
+const WA_OLD_DEFAULT_IDS = ["tpl-generico", "tpl-odonto", "tpl-concess", "tpl-delivery", "tpl-natural", "tpl-followup"];
 
 // ---- default message templates ---------------------------------------------
-// Variáveis disponíveis: {{empresa}} {{contato}} {{cidade}} {{segmento}} {{cargo}} {{responsavel}}
+// Conectados aos TEMPLATES APROVADOS na Meta (metaName) + ordem das variáveis (vars).
+// vars define o que preenche {{1}}, {{2}}, {{3}} no template oficial, em ordem.
+// O "body" espelha o texto aprovado (para prévia e registro na timeline).
 const WA_DEFAULT_TEMPLATES = [
   {
-    id: "tpl-generico", name: "1º contato — Genérico", segmento: "Todos", primeiro: true,
-    body: "Olá, {{contato}}! Aqui é {{responsavel}}, da NexusCRM. Vi que a {{empresa}} atua em {{cidade}} e gostaria de apresentar como ajudamos negócios como o seu a organizar clientes e vender mais. Posso te enviar um resumo rápido?",
+    id: "meta-odonto", name: "1º contato — Clínica Odontológica", segmento: "Clínica Odontológica", primeiro: true,
+    metaName: "primeiro_contato_inicial", metaLang: "pt_BR", vars: ["responsavel", "cidade", "empresa"],
+    body: "Oi! Aqui é {{responsavel}}, da VitalHub. Trabalhamos com clínicas odontológicas em {{cidade}} e ajudamos a aumentar significativamente o número de agendamentos sem aumentar proporcionalmente o investimento em mídia, apenas ajustando a geração de demanda e o processo de acompanhamento dos pacientes. Posso te mostrar em 5 minutos como funcionaria na {{empresa}}? Fico no aguardo!",
   },
   {
-    id: "tpl-odonto", name: "1º contato — Clínica Odontológica", segmento: "Clínica Odontológica", primeiro: true,
-    body: "Olá, {{contato}}! Sou {{responsavel}}, da NexusCRM. Trabalhamos com clínicas odontológicas em {{cidade}} ajudando a reduzir faltas de pacientes com confirmação automática por WhatsApp e agenda online. Faz sentido te mostrar como funciona na {{empresa}}?",
+    id: "meta-varejo-delivery", name: "1º contato — Delivery (Varejo)", segmento: "Delivery", primeiro: true,
+    metaName: "varejo_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
+    body: "Olá, {{contato}}.\n\nTudo bem?\n\nTrabalho com projetos voltados para crescimento comercial e fortalecimento da presença digital de empresas do varejo.\n\nAnalisando o mercado local, identificamos algumas oportunidades que costumam impactar diretamente a geração de vendas e o aproveitamento dos clientes que já demonstram interesse.\n\nGostaria de compartilhar algumas observações que podem agregar valor ao negócio.\n\nPosso enviar?",
   },
   {
-    id: "tpl-concess", name: "1º contato — Concessionária", segmento: "Concessionária", primeiro: true,
-    body: "Olá, {{contato}}! Aqui é {{responsavel}}, da NexusCRM. Ajudamos concessionárias como a {{empresa}} a organizar leads de showroom, test-drives e pós-venda num só lugar. Posso te enviar uma demonstração rápida?",
+    id: "meta-varejo-natural", name: "1º contato — Loja Natural (Varejo)", segmento: "Loja Natural", primeiro: true,
+    metaName: "varejo_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
+    body: "Olá, {{contato}}.\n\nTudo bem?\n\nTrabalho com projetos voltados para crescimento comercial e fortalecimento da presença digital de empresas do varejo.\n\nAnalisando o mercado local, identificamos algumas oportunidades que costumam impactar diretamente a geração de vendas e o aproveitamento dos clientes que já demonstram interesse.\n\nGostaria de compartilhar algumas observações que podem agregar valor ao negócio.\n\nPosso enviar?",
   },
   {
-    id: "tpl-delivery", name: "1º contato — Delivery", segmento: "Delivery", primeiro: true,
-    body: "Olá, {{contato}}! Sou {{responsavel}}, da NexusCRM. Ajudamos delivery e food service em {{cidade}} a fidelizar clientes e aumentar a recompra. Quer ver como isso funcionaria na {{empresa}}?",
+    id: "meta-empresas", name: "1º contato — Empresas (Genérico)", segmento: "Todos", primeiro: true,
+    metaName: "empresas_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
+    body: "Olá, {{contato}}.\n\nTudo bem?\n\nTrabalho com projetos focados em geração de oportunidades comerciais, posicionamento digital e melhoria de processos de vendas.\n\nNos últimos meses, identificamos alguns padrões que aparecem com frequência em empresas que buscam crescer de forma mais previsível.\n\nGostaria de compartilhar algumas observações que podem ser úteis para a operação de vocês.\n\nPosso enviar?",
   },
   {
-    id: "tpl-natural", name: "1º contato — Loja Natural", segmento: "Loja Natural", primeiro: true,
-    body: "Olá, {{contato}}! Aqui é {{responsavel}}, da NexusCRM. Trabalhamos com lojas de produtos naturais ajudando a unificar o cadastro de clientes e criar programas de fidelidade. Posso te mostrar como ficaria na {{empresa}}?",
+    id: "meta-saude", name: "1º contato — Saúde", segmento: "Todos", primeiro: false,
+    metaName: "saude_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
+    body: "Olá, {{contato}}.\n\nTudo bem?\n\nTrabalho com projetos focados em geração de demanda, posicionamento digital e estruturação comercial para empresas da área da saúde.\n\nAo longo dos últimos meses, identificamos alguns padrões e oportunidades que aparecem com frequência em clínicas e consultórios da região.\n\nGostaria de compartilhar algumas observações que podem ser relevantes para a sua operação.\n\nPosso enviar?",
   },
   {
-    id: "tpl-followup", name: "Follow-up — Sem resposta", segmento: "Todos", primeiro: false,
-    body: "Oi, {{contato}}, tudo bem? Passando para retomar nossa conversa sobre a {{empresa}}. Consigo te mostrar em 10 minutos como funciona — qual o melhor horário para você?",
+    id: "meta-followup", name: "Follow-up — Texto livre (dentro de 24h)", segmento: "Todos", primeiro: false,
+    body: "Oi, {{contato}}, tudo bem? Passando para retomar nossa conversa sobre a {{empresa}}. Consigo te mostrar em poucos minutos como funciona — qual o melhor horário para você?",
   },
 ];
 
@@ -70,11 +79,22 @@ const WA = {
   isConnected() { const c = WA.getCfg(); return !!c.live; },
   getTemplates() {
     try {
-      const t = JSON.parse(localStorage.getItem(WA_LS.tpl) || "null");
-      return Array.isArray(t) && t.length ? t : WA_DEFAULT_TEMPLATES;
+      const saved = JSON.parse(localStorage.getItem(WA_LS.tpl) || "null");
+      if (!Array.isArray(saved) || !saved.length) return WA_DEFAULT_TEMPLATES;
+      const ver = Number(localStorage.getItem("nexus_wa_tpl_ver") || "0");
+      if (ver < WA_TPL_VERSION) {
+        // migra: remove os modelos padrão antigos, mantém os personalizados do usuário
+        const defIds = WA_DEFAULT_TEMPLATES.map((t) => t.id);
+        const customs = saved.filter((t) => WA_OLD_DEFAULT_IDS.indexOf(t.id) < 0 && defIds.indexOf(t.id) < 0);
+        const merged = WA_DEFAULT_TEMPLATES.concat(customs);
+        localStorage.setItem(WA_LS.tpl, JSON.stringify(merged));
+        localStorage.setItem("nexus_wa_tpl_ver", String(WA_TPL_VERSION));
+        return merged;
+      }
+      return saved;
     } catch (e) { return WA_DEFAULT_TEMPLATES; }
   },
-  saveTemplates(t) { localStorage.setItem(WA_LS.tpl, JSON.stringify(t)); },
+  saveTemplates(t) { localStorage.setItem(WA_LS.tpl, JSON.stringify(t)); localStorage.setItem("nexus_wa_tpl_ver", String(WA_TPL_VERSION)); },
   getAuto() {
     try { return JSON.parse(localStorage.getItem(WA_LS.auto) || "null") || { onNew: false, templateId: "" }; }
     catch (e) { return { onNew: false, templateId: "" }; }
@@ -91,21 +111,21 @@ const WA = {
   clearQueue() { localStorage.removeItem("nexus_wa_queue"); localStorage.removeItem("nexus_wa_queue_last"); },
   getLast() { try { return JSON.parse(localStorage.getItem("nexus_wa_queue_last") || "0"); } catch (e) { return 0; } },
   setLast(t) { localStorage.setItem("nexus_wa_queue_last", JSON.stringify(t)); },
-  enqueue(ids, text) {
+  enqueue(ids, text, meta) {
     const q = WA.getQueue();
     const add = ids.map((id) => ({
       qid: "q" + Date.now() + "-" + id + "-" + Math.random().toString(16).slice(2, 6),
-      leadId: id, text,
+      leadId: id, text, meta: meta || null,
     }));
     WA.setQueue(q.concat(add));
     return add;
   },
-  // enfileira itens com texto próprio por lead (ex.: import com vários segmentos)
+  // enfileira itens com texto/meta próprios por lead (ex.: import com vários segmentos)
   enqueueItems(items) {
     const q = WA.getQueue();
     const add = items.map((it) => ({
       qid: "q" + Date.now() + "-" + it.leadId + "-" + Math.random().toString(16).slice(2, 6),
-      leadId: it.leadId, text: it.text,
+      leadId: it.leadId, text: it.text, meta: it.meta || null,
     }));
     WA.setQueue(q.concat(add));
     return add;
@@ -132,6 +152,31 @@ const WA = {
     return body.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => (map[k] != null ? map[k] : "{{" + k + "}}"));
   },
 
+  // Monta o descritor de template aprovado da Meta para um lead:
+  // { metaName, metaLang, components:[{type:'body', parameters:[{type:'text', text}]}] }
+  // Os valores de {{1}},{{2}},{{3}} vêm de tpl.vars (na ordem) resolvidos no lead.
+  buildMeta(tplOrInfo, lead) {
+    const metaName = tplOrInfo && tplOrInfo.metaName;
+    if (!metaName) return null;
+    const vars = tplOrInfo.vars || [];
+    const params = vars.map((k) => {
+      let v = WA.render("{{" + k + "}}", lead).trim();
+      if (!v || v === "{{" + k + "}}") v = (k === "contato" ? (lead.empresa || "tudo bem?") : "—");
+      // a Meta recusa quebras de linha/tabs e espaços duplicados em parâmetros
+      v = v.replace(/[\n\t]+/g, " ").replace(/ {2,}/g, " ").trim().slice(0, 300) || "—";
+      return { type: "text", text: v };
+    });
+    return {
+      metaName, metaLang: tplOrInfo.metaLang || "pt_BR",
+      components: params.length ? [{ type: "body", parameters: params }] : [],
+    };
+  },
+  // versão leve (só dados serializáveis) para guardar na fila
+  metaInfo(tpl) {
+    if (!tpl || !tpl.metaName) return null;
+    return { metaName: tpl.metaName, metaLang: tpl.metaLang || "pt_BR", vars: tpl.vars || [] };
+  },
+
   // pick the best template for a lead's segment (primeiro contato)
   templateForLead(lead, templates) {
     const list = templates || WA.getTemplates();
@@ -152,17 +197,28 @@ const WA = {
     return raw.replace(/^\/+|\/+$/g, "");
   },
 
+  // normaliza telefone para o formato internacional (Brasil): só dígitos + DDI 55
+  normalizePhone(raw) {
+    let d = (raw || "").replace(/\D/g, "");
+    if (!d) return "";
+    if (d.startsWith("55") && d.length >= 12) return d; // já tem DDI
+    if (d.length <= 11) return "55" + d;                // acrescenta DDI Brasil
+    return d;
+  },
+
   // Send one message. When envio real está ativo (cfg.live) e o Supabase está
   // conectado, chama a Edge Function pela sessão autenticada — o token da Meta
   // vive como SEGREDO no servidor, nunca no navegador.
   async send(lead, text, meta) {
     const cfg = WA.getCfg();
-    if (cfg.live && window.SB && SB.isConfigured() && lead.whatsapp) {
+    const to = WA.normalizePhone(lead.whatsapp);
+    if (cfg.live && window.SB && SB.isConfigured() && to) {
       try {
         const client = await SB.ensureClient();
-        const payload = { to: lead.whatsapp, text, leadId: lead.id };
+        const payload = { to, text, leadId: lead.id };
         if (meta && meta.metaName) {
           payload.template = { name: meta.metaName, language: meta.metaLang || "pt_BR" };
+          if (meta.components && meta.components.length) payload.template.components = meta.components;
         }
         const { data, error } = await client.functions.invoke(WA.fnName(), { body: payload });
         if (error) throw error;
@@ -174,7 +230,7 @@ const WA = {
     }
     // simulated send
     await new Promise((r) => setTimeout(r, 120));
-    return { ok: true, simulated: true };
+    return { ok: true, simulated: true, noPhone: !to };
   },
 
   async sendTest(numero) {
@@ -183,7 +239,7 @@ const WA = {
     try {
       const client = await SB.ensureClient();
       const { data, error } = await client.functions.invoke(WA.fnName(), {
-        body: { to: numero, text: "✅ Teste de conexão do NexusCRM. Se você recebeu, o WhatsApp está ativo!" },
+        body: { to: WA.normalizePhone(numero), text: "✅ Teste de conexão do NexusCRM. Se você recebeu, o WhatsApp está ativo!" },
       });
       if (error) throw error;
       if (data && data.error) throw new Error(data.error);
@@ -222,9 +278,14 @@ function WhatsAppSendModal({ open, leads, templates, onClose, onSend }) {
     if (t) setBody(t.body);
   };
 
+  const selTpl = tpls.find((t) => t.id === tplId) || null;
+  const isMeta = !!(selTpl && selTpl.metaName);
+
   const doSend = async () => {
     setSending(true);
-    await onSend(leads.map((l) => l.id), body, (tpls.find((t) => t.id === tplId) || {}).name);
+    // para template aprovado, sempre envia o corpo oficial (selTpl.body); senão, o texto editado
+    const textToSend = isMeta && selTpl ? selTpl.body : body;
+    await onSend(leads.map((l) => l.id), textToSend, selTpl);
     setSending(false);
     onClose();
   };
@@ -243,15 +304,24 @@ function WhatsAppSendModal({ open, leads, templates, onClose, onSend }) {
           <span className="field-label">Modelo de mensagem</span>
           <div className="select-wrap">
             <select className="select" value={tplId} onChange={(e) => pickTpl(e.target.value)}>
-              {tpls.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              {tpls.map((t) => <option key={t.id} value={t.id}>{t.name}{t.metaName ? " ✓" : ""}</option>)}
             </select>
             <Icon name="chevron-down" size={15} className="select-chevron" />
           </div>
         </label>
 
+        {isMeta && (
+          <div className="wa-mode live">
+            <Icon name="check" size={15} />
+            <span><strong>Template aprovado pela Meta</strong> (<span className="mono">{selTpl.metaName}</span>). Liberado para 1º contato frio. O texto é fixo — só as variáveis são preenchidas automaticamente.</span>
+          </div>
+        )}
+
         <label className="field">
-          <span className="field-label">Mensagem <span className="wa-vars">variáveis: {"{{empresa}} {{contato}} {{cidade}}"}</span></span>
-          <textarea className="textarea" rows={4} value={body} onChange={(e) => setBody(e.target.value)} />
+          <span className="field-label">Mensagem {isMeta ? <span className="wa-vars">texto oficial — somente leitura</span> : <span className="wa-vars">variáveis: {"{{empresa}} {{contato}} {{cidade}}"}</span>}</span>
+          <textarea className="textarea" rows={isMeta ? 6 : 4} value={body} readOnly={isMeta}
+            style={isMeta ? { opacity: 0.85, cursor: "default" } : {}}
+            onChange={(e) => setBody(e.target.value)} />
         </label>
 
         {count > 0 && (
@@ -435,6 +505,8 @@ function WhatsAppSettings({ onChanged }) {
                   <span className="wa-tpl-name">{t.name || "(sem nome)"}</span>
                   <span className="seg-tag"><span className="seg-dot" style={{ background: t.segmento === "Todos" ? COLORS.blue : (SEGMENT_COLORS[t.segmento] || COLORS.blue) }}></span>{t.segmento}</span>
                   {t.primeiro && <span className="wa-chip">1º contato</span>}
+                  {t.metaName ? <span className="wa-chip wa-chip-meta" title={"Template Meta: " + t.metaName}><Icon name="check" size={11} /> Meta</span>
+                    : <span className="wa-chip wa-chip-free" title="Texto livre — só dentro da janela de 24h">texto livre</span>}
                 </div>
                 <div className="wa-tpl-body">{t.body}</div>
               </div>

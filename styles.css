@@ -240,7 +240,8 @@ body {
 .row-selected { background: rgba(59,130,246,0.07); }
 .row-selected:hover { background: rgba(59,130,246,0.10); }
 .cell-empresa { display: flex; flex-direction: column; gap: 2px; }
-.cell-empresa-name { font-weight: 600; color: var(--text); }
+.cell-empresa-name { font-weight: 600; color: var(--text); display: inline-flex; align-items: center; gap: 8px; }
+.reply-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 700; font-family: 'Space Mono', monospace; color: #052e16; background: #25D366; padding: 1px 7px 1px 5px; border-radius: 999px; line-height: 1.5; }
 .cell-empresa-cnpj { font-size: 11px; color: var(--text-3); }
 .cell-resp { display: flex; align-items: center; gap: 9px; color: var(--text-2); white-space: nowrap; }
 .cell-muted { color: var(--text-3); }
@@ -312,6 +313,13 @@ input[type="date"].input, input[type="time"].input { color-scheme: dark; }
 .tl-type { font-size: 12.5px; font-weight: 700; }
 .tl-date { font-size: 11px; color: var(--text-3); }
 .tl-note { font-size: 13px; color: var(--text-2); margin-top: 4px; line-height: 1.5; }
+.tl-note-in { background: linear-gradient(135deg, #128C7E, #075E54); color: #fff; padding: 9px 12px; border-radius: 4px 12px 12px 12px; display: inline-block; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+
+/* quick reply box (chat) */
+.wa-reply { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.wa-reply-input { margin-bottom: 0; }
+.wa-reply-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.wa-reply-send { flex-shrink: 0; }
 
 /* ============================================================ Modal */
 .modal-root { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 24px; animation: fadeIn 0.2s ease; }
@@ -620,6 +628,8 @@ input[type="date"].input, input[type="time"].input { color-scheme: dark; }
 .wa-tpl-body { font-size: 12.5px; color: var(--text-3); line-height: 1.5; }
 .wa-tpl-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .wa-chip { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--wa); background: rgba(37,211,102,0.14); padding: 2px 7px; border-radius: 999px; }
+.wa-chip-meta { display: inline-flex; align-items: center; gap: 3px; color: var(--wa); background: rgba(37,211,102,0.16); }
+.wa-chip-free { color: var(--amber); background: rgba(245,158,11,0.14); text-transform: none; letter-spacing: 0; }
 .wa-test { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
 .wa-test-row { display: flex; gap: 10px; margin-top: 7px; }
 .wa-test-row .input { flex: 1; }

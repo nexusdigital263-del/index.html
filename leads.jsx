@@ -207,17 +207,24 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete,
             </tr>
           </thead>
           <tbody>
-            {rows.map((l) => (
+            {rows.map((l, idx) => (
               <tr key={l.id} className={"data-row" + (selected.has(l.id) ? " row-selected" : "")} onClick={() => onOpenLead(l.id)}>
                 {canSelect && (
                   <td className="col-check" onClick={(e) => e.stopPropagation()}>
                     <CheckBox checked={selected.has(l.id)} onChange={() => toggleOne(l.id)} title="Selecionar lead" />
                   </td>
                 )}
-                <td className="col-num mono">{String(l.id).padStart(2, "0")}</td>
+                <td className="col-num mono">{String((current - 1) * PAGE_SIZE + idx + 1).padStart(2, "0")}</td>
                 <td>
                   <div className="cell-empresa">
-                    <span className="cell-empresa-name">{l.empresa}</span>
+                    <span className="cell-empresa-name">
+                      {l.empresa}
+                      {l.unread > 0 && (
+                        <span className="reply-badge" title="Resposta no WhatsApp">
+                          <Icon name="message-circle" size={11} /> {l.unread}
+                        </span>
+                      )}
+                    </span>
                     <span className="cell-empresa-cnpj mono">{l.cnpj}</span>
                   </div>
                 </td>
@@ -278,9 +285,10 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete,
 }
 
 // ---- Lead detail drawer content -------------------------------------------
-function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDelete, canCreate, onWhatsApp }) {
+function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDelete, canCreate, onWhatsApp, onReply }) {
   const [tipo, setTipo] = useState("Ligação");
   const [nota, setNota] = useState("");
+  const [reply, setReply] = useState("");
   if (!lead) return null;
 
   const submit = () => {
@@ -289,7 +297,14 @@ function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDele
     setNota("");
   };
 
-  const sorted = [...lead.interacoes].sort((a, b) => b.data.localeCompare(a.data));
+  const sendReply = () => {
+    if (!reply.trim()) return;
+    onReply(lead.id, reply.trim());
+    setReply("");
+  };
+
+  const sorted = [...lead.interacoes].sort((a, b) => (a.data || "").localeCompare(b.data || ""));
+  const waNum = (lead.whatsapp || "").replace(/\D/g, "");
 
   return (
     <div className="lead-detail">
@@ -307,11 +322,6 @@ function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDele
           <PriorityBadge priority={lead.prioridade} />
           <span className="drawer-valor mono">{fmtBRL(lead.valor)}<small>/mês</small></span>
         </div>
-        {canCreate && (
-          <button className="btn btn-wa btn-block drawer-wa-btn" onClick={() => onWhatsApp(lead.id)}>
-            <Icon name="message-circle" size={16} /> Enviar WhatsApp
-          </button>
-        )}
       </div>
 
       <div className="drawer-body">
@@ -342,26 +352,48 @@ function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDele
           </button>
         </div>
 
-        <div className="detail-section-label">Timeline de interações</div>
+        <div className="detail-section-label">Conversa</div>
         <div className="timeline">
           {sorted.map((it) => {
-            const meta = INTERACTION_META[it.tipo];
+            const inbound = it.dir === "in";
+            const meta = inbound
+              ? { color: "#25D366", icon: "message-circle" }
+              : INTERACTION_META[it.tipo];
             return (
-              <div className="tl-item" key={it.id}>
+              <div className={"tl-item" + (inbound ? " tl-in" : "")} key={it.id}>
                 <div className="tl-marker" style={{ background: meta.color + "1A", color: meta.color, borderColor: meta.color + "44" }}>
                   <Icon name={meta.icon} size={13} />
                 </div>
                 <div className="tl-content">
                   <div className="tl-head">
-                    <span className="tl-type" style={{ color: meta.color }}>{it.tipo}</span>
+                    <span className="tl-type" style={{ color: meta.color }}>
+                      {inbound ? "Resposta recebida" : it.tipo}
+                    </span>
                     <span className="tl-date mono">{fmtDate(it.data)}</span>
                   </div>
-                  <p className="tl-note">{it.nota}</p>
+                  <p className={"tl-note" + (inbound ? " tl-note-in" : "")}>{it.nota}</p>
                 </div>
               </div>
             );
           })}
         </div>
+
+        {canCreate && (
+          <div className="wa-reply">
+            <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={2}
+              placeholder={waNum ? "Escreva uma resposta no WhatsApp..." : "Lead sem número de WhatsApp"}
+              className="textarea wa-reply-input" disabled={!waNum}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendReply(); }} />
+            <div className="wa-reply-row">
+              <button className="btn btn-ghost btn-sm" onClick={() => onWhatsApp(lead.id)} title="Usar um modelo">
+                <Icon name="message-circle" size={14} /> Modelos
+              </button>
+              <button className="btn btn-wa btn-sm wa-reply-send" onClick={sendReply} disabled={!reply.trim() || !waNum}>
+                <Icon name="message-circle" size={15} /> Enviar resposta
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="drawer-foot">

@@ -145,6 +145,19 @@ const REMOTE = SB.isConfigured();
 const TODAY = SB.TODAY || "2026-06-07";
 const uid = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now() + "-" + Math.random().toString(16).slice(2));
 
+// traduz erros comuns da WhatsApp Cloud API para mensagens claras
+function traduzWaErro(msg) {
+  const m = String(msg || "");
+  if (/131030|not in allowed list|allowed list/i.test(m)) return "número não está na lista de teste da Meta";
+  if (/invalid.*token|oauth|expired|190/i.test(m)) return "token da Meta inválido ou vencido";
+  if (/131026|undeliverable|not a WhatsApp/i.test(m)) return "número sem WhatsApp ou inválido";
+  if (/132000|template/i.test(m)) return "1º contato exige template aprovado pela Meta";
+  if (/re-?engagement|24|outside.*window|131047/i.test(m)) return "fora da janela de 24h — use template aprovado";
+  if (/WHATSAPP_TOKEN|WHATSAPP_PHONE_ID/i.test(m)) return "servidor sem token/phone id (segredos no Supabase)";
+  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return "sem conexão com o servidor";
+  return m.slice(0, 80);
+}
+
 function BootSplash() {
   return (
     <div className="login-screen">
@@ -229,8 +242,45 @@ function App() {
     toast("Cor de destaque atualizada", "info");
   }, [applyAccent]);
 
-  const openLead = useCallback((id) => setOpenLeadId(id), []);
+  const openLead = useCallback((id) => {
+    setOpenLeadId(id);
+    // marca respostas como lidas ao abrir o lead
+    const lead = leadsRef.current.find((l) => l.id === id);
+    if (lead && lead.unread > 0) {
+      setLeads((prev) => prev.map((l) => l.id === id ? { ...l, unread: 0 } : l));
+      if (REMOTE) sync(() => SB.markLeadRead(id));
+    }
+  }, [sync]);
   const closeDrawer = useCallback(() => setOpenLeadId(null), []);
+
+  // ---- polling de respostas recebidas (modo Supabase) ----
+  useEffect(() => {
+    if (!REMOTE || !currentId) return;
+    let alive = true;
+    const poll = async () => {
+      if (document.hidden) return;
+      try {
+        const fresh = await SB.fetchLeads();
+        if (!alive) return;
+        // detecta novas respostas (unread aumentou)
+        const prevMap = {};
+        leadsRef.current.forEach((l) => { prevMap[l.id] = l.unread || 0; });
+        let novas = 0, quem = "";
+        fresh.forEach((l) => {
+          const before = prevMap[l.id] || 0;
+          if ((l.unread || 0) > before) { novas += (l.unread - before); quem = l.empresa; }
+        });
+        setLeads(fresh);
+        if (novas > 0) {
+          toast(novas === 1 ? `💬 ${quem} respondeu no WhatsApp` : `💬 ${novas} novas respostas no WhatsApp`, "success");
+        }
+      } catch (e) { /* silencioso */ }
+    };
+    const t = setInterval(poll, 40000);
+    const onVis = () => { if (!document.hidden) poll(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { alive = false; clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
+  }, [currentId]);
 
   const addInteraction = useCallback((id, { tipo, nota }) => {
     const cur = leadsRef.current.find((l) => l.id === id);
@@ -263,11 +313,20 @@ function App() {
   const [queueInfo, setQueueInfo] = useState(() => ({ len: WA.getQueue().length, nextAt: WA.nextAt() }));
 
   // envia UMA mensagem (real ou simulada) e registra na timeline do lead
-  const sendOne = useCallback((id, text) => {
+  // metaInfo (opcional) = {metaName, metaLang, vars} → envia como template aprovado
+  const sendOne = useCallback((id, text, metaInfo) => {
     const lead = leadsRef.current.find((l) => l.id === id);
     if (!lead) return false;
     const rendered = WA.render(text, lead);
-    WA.send(lead, rendered);
+    const meta = metaInfo && metaInfo.metaName ? WA.buildMeta(metaInfo, lead) : null;
+    // envia e verifica o resultado real (avisa se a Meta recusar)
+    Promise.resolve(WA.send(lead, rendered, meta)).then((r) => {
+      if (r && r.ok === false) {
+        toast(`Falha ao enviar para ${lead.empresa}: ${traduzWaErro(r.error)}`, "error");
+      } else if (r && r.simulated && r.noPhone) {
+        toast(`${lead.empresa} sem número de WhatsApp — não enviado`, "error");
+      }
+    }).catch(() => {});
     const it = { id: uid(), data: TODAY, tipo: "WhatsApp", nota: rendered };
     const interacoes = [...lead.interacoes, it];
     setLeads((prev) => prev.map((l) => l.id === id ? { ...l, interacoes, ultimoContato: TODAY } : l));
@@ -284,7 +343,7 @@ function App() {
     const head = q[0];
     const rest = q.slice(1);
     WA.setQueue(rest);
-    const sent = sendOne(head.leadId, head.text);
+    const sent = sendOne(head.leadId, head.text, head.meta);
     if (sent) WA.setLast(Date.now());
     setQueueInfo({ len: rest.length, nextAt: rest.length ? Date.now() + WA.intervalMs() : 0 });
   }, [sendOne]);
@@ -305,15 +364,16 @@ function App() {
   }, []);
 
   // dispara para 1+ leads, respeitando o intervalo configurado
-  const logWhatsApp = useCallback((ids, text) => {
+  const logWhatsApp = useCallback((ids, text, tpl) => {
     const cur = leadsRef.current;
     const valid = ids.filter((id) => cur.find((l) => l.id === id));
     if (!valid.length) return null;
     const conn = WA.isConnected();
     const gapMs = WA.intervalMs();
+    const metaInfo = WA.metaInfo(tpl);
 
     if (gapMs === 0) {
-      valid.forEach((id) => sendOne(id, text));
+      valid.forEach((id) => sendOne(id, text, metaInfo));
       WA.setLast(Date.now());
       return { count: valid.length, conn, queued: 0, interval: 0 };
     }
@@ -322,12 +382,12 @@ function App() {
     let sentNow = 0;
     let toQueue = valid;
     if (Date.now() >= WA.getLast() + gapMs) {
-      sendOne(valid[0], text);
+      sendOne(valid[0], text, metaInfo);
       WA.setLast(Date.now());
       sentNow = 1;
       toQueue = valid.slice(1);
     }
-    if (toQueue.length) WA.enqueue(toQueue, text);
+    if (toQueue.length) WA.enqueue(toQueue, text, metaInfo);
     setQueueInfo({ len: WA.getQueue().length, nextAt: WA.nextAt() });
     return { count: valid.length, conn, queued: toQueue.length, sentNow, interval: WA.intervalMin() };
   }, [sendOne]);
@@ -339,7 +399,7 @@ function App() {
     let tpl = (auto.templateId && auto.templateId !== "auto") ? tpls.find((t) => t.id === auto.templateId) : null;
     if (!tpl) tpl = WA.templateForLead(lead, tpls);
     if (!tpl) return;
-    const r = logWhatsApp([lead.id], tpl.body);
+    const r = logWhatsApp([lead.id], tpl.body, tpl);
     if (r) toast(`WhatsApp de 1º contato ${r.conn ? "enviado" : "(simulação)"} → ${lead.empresa}`, "info");
   }, [logWhatsApp]);
 
@@ -384,17 +444,17 @@ function App() {
     const items = novos.map((lead) => {
       let tpl = (auto.templateId && auto.templateId !== "auto") ? tpls.find((t) => t.id === auto.templateId) : null;
       if (!tpl) tpl = WA.templateForLead(lead, tpls);
-      return tpl ? { leadId: lead.id, text: tpl.body } : null;
+      return tpl ? { leadId: lead.id, text: tpl.body, meta: WA.metaInfo(tpl) } : null;
     }).filter(Boolean);
     if (!items.length) return;
     const gapMs = WA.intervalMs();
     if (gapMs === 0) {
-      items.forEach((it) => sendOne(it.leadId, it.text));
+      items.forEach((it) => sendOne(it.leadId, it.text, it.meta));
       WA.setLast(Date.now());
     } else {
       let queued = items;
       if (Date.now() >= WA.getLast() + gapMs) {
-        sendOne(items[0].leadId, items[0].text);
+        sendOne(items[0].leadId, items[0].text, items[0].meta);
         WA.setLast(Date.now());
         queued = items.slice(1);
       }
@@ -481,8 +541,8 @@ function App() {
   // ---- WhatsApp ----
   const openWhatsAppBulk = useCallback((ids) => setWaModal({ open: true, leadIds: ids }), []);
   const closeWhatsApp = useCallback(() => setWaModal({ open: false, leadIds: [] }), []);
-  const sendWhatsApp = useCallback((ids, text) => {
-    const r = logWhatsApp(ids, text);
+  const sendWhatsApp = useCallback((ids, text, tpl) => {
+    const r = logWhatsApp(ids, text, tpl);
     if (!r) return;
     if (r.queued > 0) {
       const base = r.conn ? "" : " (simulação)";
@@ -492,6 +552,12 @@ function App() {
       toast(`Mensagem ${r.conn ? "enviada" : "registrada (simulação)"} para ${r.count} lead${r.count !== 1 ? "s" : ""}`, r.conn ? "success" : "info");
     }
   }, [logWhatsApp]);
+
+  // resposta rápida (chat): envia 1 mensagem direto, sem fila
+  const replyWhatsApp = useCallback((id, text) => {
+    sendOne(id, text);
+    toast(WA.isConnected() ? "Resposta enviada" : "Resposta registrada (simulação)", WA.isConnected() ? "success" : "info");
+  }, [sendOne]);
 
   // ---- auth + users ----
   const loginDemo = useCallback((id) => { setCurrentId(id); setPage("dashboard"); setCollapsed(false); }, []);
@@ -622,6 +688,7 @@ function App() {
           onAddInteraction={addInteraction}
           canDelete={canDelete} canCreate={canCreate}
           onWhatsApp={(id) => openWhatsAppBulk([id])}
+          onReply={replyWhatsApp}
           onDelete={deleteLead}
           onEdit={(l) => { setEditLead(l); setOpenLeadId(null); }} />
       </Drawer>
