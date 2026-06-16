@@ -16,6 +16,7 @@ const LS = {
   leads: "nexus_leads_v1",
   tasks: "nexus_tasks_v1",
   accent: "nexus_accent_v1",
+  theme: "vitalhub_theme",
   users: "nexus_users_v1",
   current: "nexus_current_v1",
 };
@@ -176,7 +177,10 @@ function App() {
   const [page, setPage] = useState("dashboard");
   const [leads, setLeads] = useState(() => REMOTE ? [] : loadLS(LS.leads, LEADS));
   const [tasks, setTasks] = useState(() => REMOTE ? [] : loadLS(LS.tasks, TASKS));
-  const [accent, setAccentState] = useState(() => loadLS(LS.accent, COLORS.blue));
+  const [accent, setAccentState] = useState(() => {
+    const a = loadLS(LS.accent, COLORS.forest);
+    return a === "#3B82F6" ? COLORS.forest : a; // migra o azul padrão antigo p/ verde da marca
+  });
   const [users, setUsers] = useState(() => REMOTE ? [] : loadLS(LS.users, USERS));
   const [currentId, setCurrentId] = useState(() => REMOTE ? null : loadLS(LS.current, null));
   const [booting, setBooting] = useState(REMOTE);
@@ -184,6 +188,14 @@ function App() {
   const [editLead, setEditLead] = useState(null);
   const [newLeadOpen, setNewLeadOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem(LS.theme) || "dark"; } catch (e) { return "dark"; }
+  });
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try { localStorage.setItem(LS.theme, theme); } catch (e) {}
+  }, [theme]);
+  const toggleTheme = useCallback(() => setTheme((t) => (t === "light" ? "dark" : "light")), []);
   const [waModal, setWaModal] = useState({ open: false, leadIds: [] });
 
   // refs mirror latest state so handlers can read current values without re-binding
@@ -824,6 +836,7 @@ function App() {
       <main className="main-area">
         <PageHeader title={meta.title} subtitle={meta.subtitle}
           onToggleSidebar={() => setCollapsed((c) => !c)}
+          theme={theme} onToggleTheme={toggleTheme}
           bell={<NotificationsBell leads={visibleLeads} tasks={visibleTasks} />}
           actions={canCreate && (page === "leads" || page === "dashboard")
             ? <button className="btn btn-primary" onClick={() => setNewLeadOpen(true)}><Icon name="plus" size={16} /> Novo Lead</button>
@@ -842,6 +855,7 @@ function App() {
           {hasAccess && page === "users" && <UsersScreen users={users} currentUser={currentUser} leads={leads}
             remote={REMOTE} onAdd={addUser} onUpdate={updateUser} onRemove={removeUser} />}
           {hasAccess && page === "settings" && <Settings accent={accent} onAccent={setAccent} onReset={resetData}
+            theme={theme} onSetTheme={setTheme}
             onLogout={logout} user={currentUser} remote={REMOTE}
             onWaChanged={pushWaSettings}
             onConnect={connectSupabase} onDisconnect={disconnectSupabase} />}

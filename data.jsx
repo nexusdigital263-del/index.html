@@ -4,6 +4,9 @@
 
 const COLORS = {
   blue: "#3B82F6",
+  forest: "#3E8E5A",
+  brand: "#29422C",
+  sage: "#E0E2C4",
   blueHover: "#2563EB",
   green: "#10B981",
   red: "#EF4444",
@@ -45,6 +48,8 @@ const PRIORITY_META = {
 
 // Accent → darker hover pairs (for the theme color picker)
 const ACCENT_HOVER = {
+  "#3E8E5A": "#347C4D", // forest (brand)
+  "#2F6B43": "#275837", // deep forest
   "#3B82F6": "#2563EB", // blue
   "#8B5CF6": "#7C3AED", // purple
   "#10B981": "#059669", // green

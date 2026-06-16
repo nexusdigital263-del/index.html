@@ -27,7 +27,7 @@ function LoginScreen({ remote, users, onLoginDemo, onLoginRemote, onSignUp }) {
     <div className="login-screen">
       <div className="login-card login-wide fade-in">
         <div className="brand-mark login-mark"><Icon name="activity" size={26} strokeWidth={2.5} /></div>
-        <h1 className="login-brand">Nexus<span>CRM</span></h1>
+        <h1 className="login-brand">Vital<span>Hub</span></h1>
         <p className="login-sub">Selecione seu usuário para entrar</p>
         <div className="login-users">
           {users.map((u) => (
@@ -75,7 +75,7 @@ function RemoteLogin({ onLoginRemote, onSignUp }) {
     <div className="login-screen">
       <div className="login-card fade-in">
         <div className="brand-mark login-mark"><Icon name="activity" size={26} strokeWidth={2.5} /></div>
-        <h1 className="login-brand">Nexus<span>CRM</span></h1>
+        <h1 className="login-brand">Vital<span>Hub</span></h1>
         <p className="login-sub">{mode === "login" ? "Entre com sua conta" : "Crie sua conta de acesso"}</p>
 
         <div className="auth-form">

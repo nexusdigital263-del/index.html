@@ -3,11 +3,11 @@
 // ============================================================
 const { useState: sState } = React;
 
-function Settings({ accent, onAccent, onReset, onLogout, user, remote, onConnect, onDisconnect, onWaChanged }) {
-  const accents = [COLORS.blue, COLORS.purple, COLORS.green, COLORS.cyan, COLORS.amber];
+function Settings({ accent, onAccent, onReset, onLogout, user, remote, onConnect, onDisconnect, onWaChanged, theme, onSetTheme }) {
+  const accents = [COLORS.forest, "#2F6B43", COLORS.blue, COLORS.purple, COLORS.amber];
   const ACCENT_NAMES = {
-    [COLORS.blue]: "Azul elétrico", [COLORS.purple]: "Roxo", [COLORS.green]: "Verde",
-    [COLORS.cyan]: "Ciano", [COLORS.amber]: "Âmbar",
+    [COLORS.forest]: "Verde VitalHub", "#2F6B43": "Verde floresta", [COLORS.blue]: "Azul elétrico",
+    [COLORS.purple]: "Roxo", [COLORS.amber]: "Âmbar",
   };
   const me = user || { id: "CM", name: "—", email: "", role: "Admin" };
   const isAdmin = me.role === "Admin";
@@ -35,7 +35,18 @@ function Settings({ accent, onAccent, onReset, onLogout, user, remote, onConnect
 
           {isAdmin && <WhatsAppSettings onChanged={onWaChanged} />}
 
-          <Panel title="Aparência" subtitle="Cor de destaque da interface">
+          <Panel title="Aparência" subtitle="Tema e cor de destaque">
+            <div className="theme-choice">
+              <button className={"theme-card" + (theme !== "light" ? " active" : "")} onClick={() => onSetTheme && onSetTheme("dark")}>
+                <span className="theme-prev theme-prev-dark"><span className="tp-bar"></span><span className="tp-dot"></span></span>
+                <span className="theme-card-label"><Icon name="moon" size={15} /> Escuro</span>
+              </button>
+              <button className={"theme-card" + (theme === "light" ? " active" : "")} onClick={() => onSetTheme && onSetTheme("light")}>
+                <span className="theme-prev theme-prev-light"><span className="tp-bar"></span><span className="tp-dot"></span></span>
+                <span className="theme-card-label"><Icon name="sun" size={15} /> Claro</span>
+              </button>
+            </div>
+            <div className="accent-label">Cor de destaque</div>
             <div className="accent-row">
               <div className="accent-picker">
                 {accents.map((c) => (

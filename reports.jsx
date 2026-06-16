@@ -44,12 +44,12 @@ function EvolutionLine({ data }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
       <LineChart data={data} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.16)" vertical={false} />
         <XAxis dataKey="mes" tickLine={false} axisLine={false}
           tick={{ fill: "#8B93A7", fontSize: 12, fontFamily: "'DM Sans', sans-serif" }} />
         <YAxis tickLine={false} axisLine={false}
           tick={{ fill: "#8B93A7", fontSize: 12, fontFamily: "'Space Mono', monospace" }} />
-        <Tooltip content={<ChartTooltip />} cursor={{ stroke: "rgba(255,255,255,0.1)" }} />
+        <Tooltip content={<ChartTooltip />} cursor={{ stroke: "rgba(128,128,128,0.28)" }} />
         <Legend wrapperStyle={{ fontSize: 12.5, fontFamily: "'DM Sans', sans-serif", paddingTop: 8 }} iconType="circle" />
         <Line type="monotone" dataKey="abertos" name="Abertos" stroke={COLORS.blue} strokeWidth={2.5}
           dot={{ r: 3, fill: COLORS.blue, strokeWidth: 0 }} activeDot={{ r: 5 }} isAnimationActive={false} />
@@ -66,15 +66,15 @@ function CityBars({ data }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
       <BarChart data={data} margin={{ top: 16, right: 8, left: -16, bottom: 0 }} barCategoryGap="30%">
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.16)" vertical={false} />
         <XAxis dataKey="cidade" tickLine={false} axisLine={false}
           tick={{ fill: "#8B93A7", fontSize: 12, fontFamily: "'DM Sans', sans-serif" }} />
         <YAxis tickLine={false} axisLine={false}
           tick={{ fill: "#8B93A7", fontSize: 12, fontFamily: "'Space Mono', monospace" }} />
-        <Tooltip cursor={{ fill: "rgba(255,255,255,0.04)" }} content={<ChartTooltip unit=" leads" />} />
+        <Tooltip cursor={{ fill: "rgba(128,128,128,0.12)" }} content={<ChartTooltip unit=" leads" />} />
         <Bar dataKey="leads" name="Leads" radius={[6, 6, 0, 0]} barSize={46} isAnimationActive={false}>
           {data.map((d, i) => <Cell key={i} fill={palette[i % palette.length]} />)}
-          <LabelList dataKey="leads" position="top" fill="#E6E9F0"
+          <LabelList dataKey="leads" position="top" fill="#3E8E5A"
             style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, fontWeight: 700 }} />
         </Bar>
       </BarChart>

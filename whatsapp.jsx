@@ -29,11 +29,11 @@ function SettingsRow({ icon, title, desc, control, accent }) {
 }
 
 const WA_LS = { cfg: "nexus_wa_cfg", tpl: "nexus_wa_tpl", auto: "nexus_wa_auto" };
-const WA_TPL_VERSION = 4; // bump → migra modelos padrão preservando os personalizados
+const WA_TPL_VERSION = 6; // bump → migra modelos padrão preservando os personalizados
 const WA_OLD_DEFAULT_IDS = [
   "tpl-generico", "tpl-odonto", "tpl-concess", "tpl-delivery", "tpl-natural", "tpl-followup",
   // v3 default ids (substituídos na v4)
-  "meta-odonto", "meta-varejo-delivery", "meta-varejo-natural", "meta-empresas", "meta-saude", "meta-followup",
+  "meta-odonto", "meta-varejo-delivery", "meta-varejo-natural", "meta-empresas", "meta-saude", "meta-medicos", "meta-followup",
 ];
 
 // ---- default message templates ---------------------------------------------
@@ -48,12 +48,12 @@ const WA_DEFAULT_TEMPLATES = [
   },
   {
     id: "meta-veiculos", name: "1º contato — Concessionária / Veículos", segmento: "Concessionária", primeiro: true,
-    metaName: "veiculos_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
+    metaName: "veiculos_contato_inicial_", metaLang: "pt_BR", vars: ["contato"],
     body: "Olá, {{contato}}. Tudo bem? Trabalho ajudando concessionárias e revendas a venderem mais sem depender só do movimento de loja: estruturamos a geração de leads qualificados e o acompanhamento de quem pede test-drive, avaliação ou financiamento, para que menos oportunidades esfriem no caminho. Identifiquei alguns pontos no mercado local que costumam aumentar as vendas. Posso compartilhar com você?",
   },
   {
     id: "meta-delivery", name: "1º contato — Delivery / Restaurantes", segmento: "Delivery", primeiro: true,
-    metaName: "delivery_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
+    metaName: "delivery_contato_inicial_", metaLang: "pt_BR", vars: ["contato"],
     body: "Olá, {{contato}}. Tudo bem? Trabalho ajudando negócios de delivery e food service a venderem mais sem depender só dos aplicativos, organizando a recompra dos clientes que já pediram e a captação de novos pedidos diretos. Levantei algumas observações sobre o mercado local que costumam aumentar o faturamento e reduzir a dependência de comissões. Posso compartilhar com você?",
   },
   {
@@ -63,18 +63,8 @@ const WA_DEFAULT_TEMPLATES = [
   },
   {
     id: "meta-empresas", name: "1º contato — Empresas (Genérico / Outros)", segmento: "Outros", primeiro: true,
-    metaName: "empresas_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
+    metaName: "empresas_contato_inicial_", metaLang: "pt_BR", vars: ["contato"],
     body: "Olá, {{contato}}.\n\nTudo bem?\n\nTrabalho com projetos focados em geração de oportunidades comerciais, posicionamento digital e melhoria de processos de vendas.\n\nNos últimos meses, identificamos alguns padrões que aparecem com frequência em empresas que buscam crescer de forma mais previsível.\n\nGostaria de compartilhar algumas observações que podem ser úteis para a operação de vocês.\n\nPosso enviar?",
-  },
-  {
-    id: "meta-medicos", name: "1º contato — Médicos / Consultórios", segmento: "Todos", primeiro: true,
-    metaName: "medicos_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
-    body: "Olá, Dr(a). {{contato}}. Tudo bem? Trabalho ajudando médicos e consultórios a preencherem melhor a agenda e reduzirem faltas de pacientes, organizando a captação de novos pacientes e a confirmação de consultas de forma simples e sem sobrecarregar a recepção. Levantei algumas observações que costumam fazer diferença na rotina do consultório. Posso compartilhar com você?",
-  },
-  {
-    id: "meta-saude", name: "1º contato — Saúde (Genérico)", segmento: "Todos", primeiro: false,
-    metaName: "saude_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
-    body: "Olá, {{contato}}.\n\nTudo bem?\n\nTrabalho com projetos focados em geração de demanda, posicionamento digital e estruturação comercial para empresas da área da saúde.\n\nAo longo dos últimos meses, identificamos alguns padrões e oportunidades que aparecem com frequência em clínicas e consultórios da região.\n\nGostaria de compartilhar algumas observações que podem ser relevantes para a sua operação.\n\nPosso enviar?",
   },
   {
     id: "meta-followup", name: "Follow-up — Texto livre (dentro de 24h)", segmento: "Todos", primeiro: false,
@@ -97,8 +87,11 @@ const WA = {
   migrateTemplates(saved, ver) {
     if (!Array.isArray(saved) || !saved.length) return WA_DEFAULT_TEMPLATES.slice();
     const defIds = WA_DEFAULT_TEMPLATES.map((t) => t.id);
+    // remove SEMPRE os modelos padrão antigos (ex: médicos/saúde descontinuados),
+    // mesmo se a versão já estiver atual — eles nunca devem reaparecer.
+    const hasOld = saved.some((t) => WA_OLD_DEFAULT_IDS.indexOf(t.id) >= 0 && defIds.indexOf(t.id) < 0);
     const hasAllDefaults = defIds.every((id) => saved.some((t) => t.id === id));
-    if (Number(ver) >= WA_TPL_VERSION && hasAllDefaults) return saved;
+    if (Number(ver) >= WA_TPL_VERSION && hasAllDefaults && !hasOld) return saved;
     const customs = saved.filter((t) => WA_OLD_DEFAULT_IDS.indexOf(t.id) < 0 && defIds.indexOf(t.id) < 0);
     return WA_DEFAULT_TEMPLATES.concat(customs);
   },
@@ -109,7 +102,8 @@ const WA = {
       const ver = Number(localStorage.getItem("nexus_wa_tpl_ver") || "0");
       const defIds = WA_DEFAULT_TEMPLATES.map((t) => t.id);
       const hasAllDefaults = defIds.every((id) => saved.some((t) => t.id === id));
-      if (ver < WA_TPL_VERSION || !hasAllDefaults) {
+      const hasOld = saved.some((t) => WA_OLD_DEFAULT_IDS.indexOf(t.id) >= 0 && defIds.indexOf(t.id) < 0);
+      if (ver < WA_TPL_VERSION || !hasAllDefaults || hasOld) {
         const merged = WA.migrateTemplates(saved, ver);
         localStorage.setItem(WA_LS.tpl, JSON.stringify(merged));
         localStorage.setItem("nexus_wa_tpl_ver", String(WA_TPL_VERSION));

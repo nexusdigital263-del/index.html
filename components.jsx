@@ -89,7 +89,7 @@ function Sidebar({ active, onNavigate, collapsed, onLogout, user, badges }) {
     <aside className={"sidebar" + (collapsed ? " sidebar-collapsed" : "")}>
       <div className="sidebar-brand">
         <div className="brand-mark"><Icon name="activity" size={20} strokeWidth={2.5} /></div>
-        {!collapsed && <div className="brand-name">Nexus<span>CRM</span></div>}
+        {!collapsed && <div className="brand-name">Vital<span>Hub</span></div>}
       </div>
 
       <nav className="sidebar-nav">
@@ -122,7 +122,7 @@ function Sidebar({ active, onNavigate, collapsed, onLogout, user, badges }) {
 }
 
 // ---- Page header -----------------------------------------------------------
-function PageHeader({ title, subtitle, actions, onToggleSidebar, bell }) {
+function PageHeader({ title, subtitle, actions, onToggleSidebar, bell, theme, onToggleTheme }) {
   return (
     <header className="page-header">
       <div className="page-header-left">
@@ -136,6 +136,12 @@ function PageHeader({ title, subtitle, actions, onToggleSidebar, bell }) {
       </div>
       <div className="page-header-actions">
         {actions}
+        {onToggleTheme && (
+          <button className="icon-btn theme-toggle" onClick={onToggleTheme}
+            title={theme === "light" ? "Tema escuro" : "Tema claro"}>
+            <Icon name={theme === "light" ? "moon" : "sun"} size={18} />
+          </button>
+        )}
         {bell}
       </div>
     </header>

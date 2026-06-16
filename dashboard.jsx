@@ -29,10 +29,10 @@ function FunnelChart({ data }) {
         <XAxis type="number" hide />
         <YAxis type="category" dataKey="etapa" width={132} tickLine={false} axisLine={false}
           tick={{ fill: "#8B93A7", fontSize: 12.5, fontFamily: "'DM Sans', sans-serif" }} />
-        <Tooltip cursor={{ fill: "rgba(255,255,255,0.04)" }} content={<ChartTooltip unit=" leads" />} />
+        <Tooltip cursor={{ fill: "rgba(128,128,128,0.12)" }} content={<ChartTooltip unit=" leads" />} />
         <Bar dataKey="qtd" radius={[0, 6, 6, 0]} barSize={22} isAnimationActive={false}>
           {data.map((d, i) => <Cell key={i} fill={d.fill} />)}
-          <LabelList dataKey="qtd" position="right" fill="#E6E9F0"
+          <LabelList dataKey="qtd" position="right" fill="#3E8E5A"
             style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, fontWeight: 700 }} />
         </Bar>
       </BarChart>
@@ -89,7 +89,7 @@ function Dashboard({ leads, onOpenLead }) {
   return (
     <div className="screen-pad fade-in">
       <div className="kpi-grid">
-        <KpiCard icon="users" label="Total de Leads" value={k.total} delta="+12%" deltaUp accent={COLORS.blue} />
+        <KpiCard icon="users" label="Total de Leads" value={k.total} delta="+12%" deltaUp accent={COLORS.forest} />
         <KpiCard icon="handshake" label="Em Negociação" value={k.negociacao} delta="+8%" deltaUp accent={COLORS.purple} />
         <KpiCard icon="calendar-check" label="Fechamentos no Mês" value={k.fechados} delta="-2%" deltaUp={false} accent={COLORS.green} />
         <KpiCard icon="target" label="Taxa de Conversão" value={k.conversao} suffix="%" delta="+5%" deltaUp accent={COLORS.amber} />
