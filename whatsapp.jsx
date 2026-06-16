@@ -166,6 +166,45 @@ const WA = {
   },
   dueSchedule(now) { return WA.getSchedule().filter((x) => (x.dueAt || 0) <= (now || Date.now())); },
 
+  // ---- limite diário de envios (proteção/aquecimento do número) ----
+  getDailyLimit() { const c = WA.getCfg(); return c.dailyLimit != null ? c.dailyLimit : 0; }, // 0 = sem limite
+  _today() { return new Date().toISOString().slice(0, 10); },
+  getDailyCount() {
+    try { const d = JSON.parse(localStorage.getItem("nexus_wa_daily") || "null"); if (d && d.date === WA._today()) return d.count || 0; } catch (e) {}
+    return 0;
+  },
+  incDaily(n) {
+    const count = WA.getDailyCount() + (n || 1);
+    localStorage.setItem("nexus_wa_daily", JSON.stringify({ date: WA._today(), count }));
+    return count;
+  },
+  remainingToday() { const lim = WA.getDailyLimit(); if (!lim) return Infinity; return Math.max(0, lim - WA.getDailyCount()); },
+  canSendMore() { return WA.remainingToday() > 0; },
+
+  // ---- log de erros de envio (recusas da Meta) ----
+  getErrors() { try { return JSON.parse(localStorage.getItem("nexus_wa_errors") || "[]") || []; } catch (e) { return []; } },
+  logError(leadId, empresa, error) {
+    const list = WA.getErrors();
+    list.unshift({ id: "e" + Date.now() + "-" + Math.random().toString(16).slice(2, 6), ts: Date.now(), leadId, empresa: empresa || "", error: String(error || "").slice(0, 300) });
+    localStorage.setItem("nexus_wa_errors", JSON.stringify(list.slice(0, 100)));
+  },
+  clearErrors() { localStorage.removeItem("nexus_wa_errors"); },
+
+  // ---- pausa/retomada da fila ----
+  isPaused() { return localStorage.getItem("nexus_wa_paused") === "1"; },
+  setPaused(v) { if (v) localStorage.setItem("nexus_wa_paused", "1"); else localStorage.removeItem("nexus_wa_paused"); },
+
+  // ---- respostas rápidas (Conversas) ----
+  QUICK_DEFAULTS: [
+    "Perfeito! Consigo te mostrar em 5 minutos como funciona. Qual o melhor horário para você?",
+    "Posso te enviar uma proposta personalizada. Ótimo, qual o melhor e-mail para envio?",
+    "Que ótimo! Vamos agendar uma conversa rápida? Tenho horários hoje e amanhã.",
+    "Obrigado pelo retorno! Fico à disposição para qualquer dúvida.",
+    "Sem problema! Posso te procurar mais para frente. Quando seria um bom momento?",
+  ],
+  getQuickReplies() { try { const s = JSON.parse(localStorage.getItem("nexus_wa_quick") || "null"); return Array.isArray(s) && s.length ? s : WA.QUICK_DEFAULTS; } catch (e) { return WA.QUICK_DEFAULTS; } },
+  setQuickReplies(a) { localStorage.setItem("nexus_wa_quick", JSON.stringify(a)); },
+
   // ---- intervalo entre envios (anti-bloqueio) ----
   intervalMin() { const c = WA.getCfg(); return c.intervalMin != null ? c.intervalMin : 5; },
   intervalMs() { return Math.max(0, WA.intervalMin()) * 60000; },
@@ -329,7 +368,7 @@ const WA = {
         const { data, error } = await client.functions.invoke(WA.fnName(), { body: payload, headers });
         if (error) throw new Error(await WA.readFnError(error));
         if (data && data.error) throw new Error(data.error);
-        return { ok: true, simulated: false, data };
+        return { ok: true, simulated: false, data, wamid: (data && data.id) || null };
       } catch (e) {
         return { ok: false, simulated: false, error: (e && e.message) ? e.message : String(e) };
       }
@@ -526,24 +565,33 @@ function WhatsAppSendModal({ open, leads, templates, onClose, onSend }) {
 }
 
 // ---- Floating queue status bar ---------------------------------------------
-function WhatsAppQueueBar({ info, onCancel }) {
+function WhatsAppQueueBar({ info, onCancel, onPause, onResume, onSendNow }) {
   const [, force] = wState(0);
   wEffect(() => {
     const t = setInterval(() => force((n) => n + 1), 1000);
     return () => clearInterval(t);
   }, []);
+  const paused = info.paused === "limite" ? "limite" : (WA.isPaused() ? "manual" : false);
   const msLeft = Math.max(0, (info.nextAt || 0) - Date.now());
   const mm = Math.floor(msLeft / 60000);
   const ss = Math.floor((msLeft % 60000) / 1000);
   const eta = info.nextAt ? (mm > 0 ? `${mm}min ${ss}s` : `${ss}s`) : "agora";
   return (
-    <div className="wa-queue-bar">
-      <span className="wa-queue-icon"><Icon name="message-circle" size={16} /></span>
+    <div className={"wa-queue-bar" + (paused ? " wa-queue-paused" : "")}>
+      <span className="wa-queue-icon"><Icon name={paused ? "clock" : "message-circle"} size={16} /></span>
       <div className="wa-queue-text">
         <div className="wa-queue-title">{info.len} {info.len !== 1 ? "mensagens" : "mensagem"} na fila</div>
-        <div className="wa-queue-eta">próxima em {eta}</div>
+        <div className="wa-queue-eta">{paused === "limite" ? "limite diário atingido — retoma amanhã" : paused === "manual" ? "fila pausada" : `próxima em ${eta}`}</div>
       </div>
-      <button className="wa-queue-cancel" onClick={onCancel} title="Cancelar fila"><Icon name="x" size={15} /></button>
+      <div className="wa-queue-actions">
+        {paused === "manual"
+          ? <button className="wa-queue-btn" onClick={onResume} title="Retomar fila"><Icon name="message-circle" size={14} /> Retomar</button>
+          : paused !== "limite" && <React.Fragment>
+              <button className="wa-queue-btn" onClick={onSendNow} title="Enviar a próxima agora"><Icon name="arrow-up-right" size={14} /> Agora</button>
+              <button className="wa-queue-btn" onClick={onPause} title="Pausar fila"><Icon name="clock" size={14} /> Pausar</button>
+            </React.Fragment>}
+        <button className="wa-queue-cancel" onClick={onCancel} title="Cancelar fila"><Icon name="x" size={15} /></button>
+      </div>
     </div>
   );
 }
@@ -554,6 +602,8 @@ function WhatsAppSettings({ onChanged }) {
   const [auto, setAutoState] = wState(WA.getAuto());
   const [templates, setTemplates] = wState(WA.getTemplates());
   const [editing, setEditing] = wState(null); // template being edited
+  const [uiTick, setUiTick] = wState(0); // força refresh de contadores/erros
+  const refreshUi = () => setUiTick((n) => n + 1);
   const [testNum, setTestNum] = wState("");
   const [testTplId, setTestTplId] = wState("");
   const [testing, setTesting] = wState(false);
@@ -695,6 +745,10 @@ function WhatsAppSettings({ onChanged }) {
         </div>
       </Panel>
 
+      <Panel title="Proteção do número" subtitle="Limite diário e aquecimento — evita bloqueios da Meta">
+        <NumberProtection cfg={cfg} onSaveCfg={saveCfg} tick={uiTick} onRefresh={refreshUi} />
+      </Panel>
+
       <Panel title="Modelos de mensagem" subtitle="Edite os textos da prospecção"
         right={<button className="btn btn-ghost btn-sm" onClick={() => setEditing({ id: "tpl-" + Date.now(), name: "", segmento: "Todos", primeiro: true, body: "", _new: true })}><Icon name="plus" size={14} /> Novo</button>}>
         <div className="wa-tpl-list">
@@ -730,6 +784,92 @@ function WhatsAppSettings({ onChanged }) {
           setEditing(null);
         }} />
     </React.Fragment>
+  );
+}
+
+// ---- Number protection: daily limit + warmup + error log ------------------
+function NumberProtection({ cfg, onSaveCfg, tick, onRefresh }) {
+  const tradErr = (s) => (window.traduzWaErro ? window.traduzWaErro(s) : s);
+  const limit = cfg.dailyLimit != null ? cfg.dailyLimit : 0;
+  const count = WA.getDailyCount();
+  const errors = WA.getErrors();
+  const remaining = limit ? Math.max(0, limit - count) : null;
+  const pct = limit ? Math.min(100, Math.round((count / limit) * 100)) : 0;
+  const WARMUP = [
+    { d: "Semana 1", v: 20 }, { d: "Semana 2", v: 40 }, { d: "Semana 3", v: 80 },
+    { d: "Semana 4", v: 250 }, { d: "Depois", v: 1000 },
+  ];
+
+  return (
+    <div className="wa-protect">
+      <div className="wa-interval-head">
+        <span className="settings-icon" style={{ background: COLORS.green + "1A", color: COLORS.green }}><Icon name="shield" size={17} /></span>
+        <div className="settings-text">
+          <div className="settings-title">Limite diário de envios</div>
+          <div className="settings-desc">Número novo tem reputação frágil. Comece devagar e aumente conforme a qualidade sobe.</div>
+        </div>
+      </div>
+
+      <div className="wa-interval-opts">
+        {[0, 20, 50, 100, 250, 500, 1000].map((m) => (
+          <button key={m} className={"wa-int-opt" + (limit === m ? " active" : "")}
+            onClick={() => onSaveCfg({ ...cfg, dailyLimit: m })}>
+            {m === 0 ? "Sem limite" : m}
+          </button>
+        ))}
+      </div>
+
+      {limit > 0 ? (
+        <div className="wa-daily">
+          <div className="wa-daily-bar"><div className="wa-daily-fill" style={{ width: pct + "%", background: pct >= 100 ? COLORS.red : pct >= 80 ? COLORS.amber : COLORS.green }}></div></div>
+          <div className="wa-daily-info">
+            <span className="mono">{count}</span> enviados hoje · <span className="mono">{remaining}</span> restantes
+            {remaining === 0 && <strong className="wa-daily-full"> — limite atingido, a fila retoma amanhã</strong>}
+            <button className="bulk-link" onClick={onRefresh} style={{ marginLeft: 8 }}>atualizar</button>
+          </div>
+        </div>
+      ) : (
+        <p className="accent-note">Sem limite — recomendado apenas com o número já aquecido. <span className="mono">{count}</span> enviados hoje.</p>
+      )}
+
+      <div className="wa-warmup">
+        <div className="wa-warmup-title">Aquecimento sugerido (envios/dia)</div>
+        <div className="wa-warmup-steps">
+          {WARMUP.map((w) => (
+            <div className="wa-warmup-step" key={w.d}>
+              <span className="wa-warmup-d">{w.d}</span>
+              <span className="wa-warmup-v mono">{w.v}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="wa-errors">
+        <div className="wa-errors-head">
+          <div className="settings-title">Erros de envio recentes {errors.length > 0 && <span className="wa-err-count">{errors.length}</span>}</div>
+          <div className="wa-errors-actions">
+            <button className="bulk-link" onClick={onRefresh}>atualizar</button>
+            {errors.length > 0 && <button className="bulk-link wa-err-clear" onClick={() => { if (window.confirm("Limpar o log de erros?")) { WA.clearErrors(); onRefresh(); } }}>limpar</button>}
+          </div>
+        </div>
+        {errors.length === 0 ? (
+          <p className="accent-note">Nenhum erro de envio registrado. Quando a Meta recusar uma mensagem, ela aparece aqui com o motivo.</p>
+        ) : (
+          <div className="wa-err-list">
+            {errors.slice(0, 12).map((e) => (
+              <div className="wa-err-row" key={e.id}>
+                <Icon name="x" size={14} className="wa-err-icon" />
+                <div className="wa-err-main">
+                  <div className="wa-err-empresa">{e.empresa || "Lead"}</div>
+                  <div className="wa-err-msg">{tradErr(e.error)}</div>
+                </div>
+                <span className="wa-err-time mono">{new Date(e.ts).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

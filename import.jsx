@@ -115,6 +115,34 @@ function rowsToLeads(rows) {
   return { leads: out, total: out.length, skipped, map };
 }
 
+// Valida telefones e detecta duplicados (no arquivo e contra a base existente).
+// Retorna { importable, dupBatch, dupExisting, noPhone, invalidPhone, total }
+function validateImport(leads, existing) {
+  const norm = (raw) => (window.WA ? WA.normalizePhone(raw) : (raw || "").replace(/\D/g, ""));
+  const validLen = (d) => d.length >= 12 && d.length <= 13; // 55 + DDD + 8/9 dígitos
+  const existPhones = {}, existNames = {};
+  (existing || []).forEach((l) => {
+    const d = norm(l.whatsapp); if (d) existPhones[d] = true;
+    existNames[_norm(l.empresa)] = true;
+  });
+  const seenPhone = {}, seenName = {};
+  const importable = [], dupBatch = [], dupExisting = [];
+  let noPhone = 0, invalidPhone = 0;
+  leads.forEach((l) => {
+    const d = norm(l.whatsapp);
+    const nameKey = _norm(l.empresa);
+    // duplicado dentro do arquivo (mesmo telefone ou mesma empresa)
+    if ((d && seenPhone[d]) || (nameKey && seenName[nameKey])) { dupBatch.push(l); return; }
+    // duplicado contra a base já existente
+    if ((d && existPhones[d]) || (nameKey && existNames[nameKey])) { dupExisting.push(l); return; }
+    if (d) seenPhone[d] = true; if (nameKey) seenName[nameKey] = true;
+    if (!d) noPhone++;
+    else if (!validLen(d)) invalidPhone++;
+    importable.push(l);
+  });
+  return { importable, dupBatch: dupBatch.length, dupExisting: dupExisting.length, noPhone, invalidPhone, total: leads.length };
+}
+
 function downloadImportTemplate() {
   const header = ["Empresa", "Contato", "Cargo", "WhatsApp", "Segmento", "Cidade", "Valor mensal (R$)", "Status"];
   const sample = ["Clínica Exemplo", "Maria Silva", "Sócia", "(34) 99999-8888", "Clínica Odontológica", "Uberlândia", "1500", "Novo"];
@@ -128,7 +156,7 @@ function downloadImportTemplate() {
 }
 
 // ---- Import modal ----------------------------------------------------------
-function ImportLeadsModal({ open, onClose, onImport, autoOn, intervalMin }) {
+function ImportLeadsModal({ open, onClose, onImport, autoOn, intervalMin, existing }) {
   const [parsed, setParsed] = iState(null);
   const [fileName, setFileName] = iState("");
   const [busy, setBusy] = iState(false);
@@ -146,14 +174,17 @@ function ImportLeadsModal({ open, onClose, onImport, autoOn, intervalMin }) {
   };
   const doImport = async () => {
     if (!parsed || !parsed.leads.length) return;
+    const rev = validateImport(parsed.leads, existing || []);
+    if (!rev.importable.length) return;
     setBusy(true);
-    await onImport(parsed.leads);
+    await onImport(rev.importable);
     setBusy(false);
     onClose();
   };
 
   const preview = parsed && parsed.leads ? parsed.leads.slice(0, 5) : [];
-  const newCount = parsed && parsed.leads ? parsed.leads.filter((l) => l.status === "Novo").length : 0;
+  const review = parsed && parsed.leads && parsed.leads.length ? validateImport(parsed.leads, existing || []) : null;
+  const newCount = review ? review.importable.filter((l) => l.status === "Novo").length : 0;
 
   return (
     <Modal open={open} onClose={onClose} title="Importar leads (CSV)" width={640}>
@@ -182,9 +213,19 @@ function ImportLeadsModal({ open, onClose, onImport, autoOn, intervalMin }) {
         {parsed && !parsed.noEmpresa && parsed.total > 0 && (
           <React.Fragment>
             <div className="import-summary">
-              <span className="import-stat"><strong className="mono">{parsed.total}</strong> leads prontos para importar</span>
-              {parsed.skipped > 0 && <span className="import-stat muted">{parsed.skipped} linha(s) sem empresa ignorada(s)</span>}
+              <span className="import-stat"><strong className="mono">{review ? review.importable.length : parsed.total}</strong> leads a importar</span>
+              {parsed.skipped > 0 && <span className="import-stat muted">{parsed.skipped} sem empresa ignorada(s)</span>}
+              {review && (review.dupBatch + review.dupExisting) > 0 && <span className="import-stat warn">{review.dupBatch + review.dupExisting} duplicado(s) removido(s)</span>}
             </div>
+
+            {review && (review.invalidPhone > 0 || review.noPhone > 0 || review.dupExisting > 0) && (
+              <div className="import-checks">
+                {review.dupExisting > 0 && <div className="import-check"><Icon name="check" size={13} /> {review.dupExisting} já existem na sua base (não serão duplicados)</div>}
+                {review.dupBatch > 0 && <div className="import-check"><Icon name="check" size={13} /> {review.dupBatch} repetido(s) dentro do arquivo</div>}
+                {review.invalidPhone > 0 && <div className="import-check warn"><Icon name="message-circle" size={13} /> {review.invalidPhone} com telefone inválido — serão importados, mas não recebem WhatsApp</div>}
+                {review.noPhone > 0 && <div className="import-check warn"><Icon name="message-circle" size={13} /> {review.noPhone} sem telefone — serão importados sem envio</div>}
+              </div>
+            )}
 
             <div className="import-preview">
               <table className="data-table">
@@ -222,12 +263,12 @@ function ImportLeadsModal({ open, onClose, onImport, autoOn, intervalMin }) {
 
       <div className="modal-foot">
         <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-        <button className="btn btn-primary" disabled={busy || !parsed || !parsed.leads || !parsed.leads.length} onClick={doImport}>
-          <Icon name="download" size={15} /> {busy ? "Importando…" : (parsed && parsed.total ? `Importar ${parsed.total} leads` : "Importar")}
+        <button className="btn btn-primary" disabled={busy || !review || !review.importable.length} onClick={doImport}>
+          <Icon name="download" size={15} /> {busy ? "Importando…" : (review && review.importable.length ? `Importar ${review.importable.length} leads` : "Importar")}
         </button>
       </div>
     </Modal>
   );
 }
 
-Object.assign(window, { ImportLeadsModal, parseCSV, rowsToLeads });
+Object.assign(window, { ImportLeadsModal, parseCSV, rowsToLeads, validateImport });

@@ -5,6 +5,28 @@
 // ============================================================
 const { useState: iState, useMemo: iMemo, useEffect: iEffect, useRef: iRef } = React;
 
+// status de entrega de uma mensagem enviada (✓ enviado, ✓✓ entregue, ✓✓ lido azul, ⚠ falhou)
+function MsgStatus({ status }) {
+  if (status === "failed") return <span className="msg-status failed" title="Falha no envio"> ⚠</span>;
+  const cls = status === "read" ? "read" : (status === "delivered" ? "delivered" : "sent");
+  const title = status === "read" ? "Lido" : (status === "delivered" ? "Entregue" : "Enviado");
+  const double = status === "delivered" || status === "read";
+  return (
+    <span className={"msg-status " + cls} title={title}>
+      <svg width="16" height="11" viewBox="0 0 18 11" fill="none" aria-hidden="true">
+        <path d="M1 5.8 4 9l6.5-7.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        {double && <path d="M7 9l1 0.9L14.8 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />}
+      </svg>
+    </span>
+  );
+}
+
+// rótulo curto para o chip de resposta rápida
+function quickLabel(q) {
+  const w = q.split(/\s+/).slice(0, 4).join(" ");
+  return w.length < q.length ? w + "…" : w;
+}
+
 // mensagens de WhatsApp de um lead (enviadas + recebidas), em ordem cronológica
 function waThread(lead) {
   return (lead.interacoes || [])
@@ -16,7 +38,7 @@ function lastThreadDate(msgs) {
   return msgs.length ? msgs[msgs.length - 1].data || "" : "";
 }
 
-function InboxScreen({ leads, onReply, onMarkRead, onClearConversation, onSetOptOut, onOpenLead }) {
+function InboxScreen({ leads, onReply, onMarkRead, onClearConversation, onSetOptOut, onMoveLead, onOpenLead }) {
   const convos = iMemo(() => {
     return leads
       .map((l) => {
@@ -159,7 +181,16 @@ function InboxScreen({ leads, onReply, onMarkRead, onClearConversation, onSetOpt
                 </div>
               </div>
               <div className="inbox-thread-actions">
-                <StatusBadge status={sel.lead.status} />
+                {onMoveLead ? (
+                  <div className="inbox-status-wrap select-wrap" title="Mover no funil">
+                    <select className="select inbox-status-select" value={sel.lead.status}
+                      style={{ "--st": (STATUS_META[sel.lead.status] || {}).color || COLORS.blue }}
+                      onChange={(e) => onMoveLead(sel.lead.id, e.target.value)}>
+                      {STATUS.map((s) => <option key={s} value={s}>{(STATUS_META[s] || {}).kanban || s}</option>)}
+                    </select>
+                    <Icon name="chevron-down" size={14} className="select-chevron" />
+                  </div>
+                ) : <StatusBadge status={sel.lead.status} />}
                 <button className="btn btn-ghost btn-sm" onClick={() => onOpenLead(sel.lead.id)}>
                   <Icon name="external-link" size={14} /> Abrir lead
                 </button>
@@ -183,12 +214,23 @@ function InboxScreen({ leads, onReply, onMarkRead, onClearConversation, onSetOpt
                   <div key={m.id} className={"chat-row " + (inbound ? "in" : "out")}>
                     <div className="chat-bubble">
                       <div className="chat-text">{m.nota}</div>
-                      <div className="chat-time mono">{fmtDate(m.data)}</div>
+                      <div className="chat-time mono">
+                        {fmtDate(m.data)}
+                        {!inbound && <MsgStatus status={m.status} />}
+                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
+
+            {sel.lead.whatsapp && (
+              <div className="inbox-quick">
+                {WA.getQuickReplies().map((q, i) => (
+                  <button key={i} className="inbox-quick-chip" title={q} onClick={() => setReply(q)}>{quickLabel(q)}</button>
+                ))}
+              </div>
+            )}
 
             <div className="inbox-composer">
               <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={1}

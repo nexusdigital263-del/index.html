@@ -151,6 +151,7 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete,
         <ImportLeadsModal open={importOpen} onClose={() => setImportOpen(false)}
           autoOn={!!(window.WA && WA.getAuto().onNew)}
           intervalMin={window.WA ? WA.intervalMin() : 0}
+          existing={leads}
           onImport={(rows) => onImportLeads && onImportLeads(rows)} />
       )}
 

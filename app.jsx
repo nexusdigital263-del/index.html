@@ -158,6 +158,7 @@ function traduzWaErro(msg) {
   if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return "sem conexão com o servidor";
   return m.slice(0, 80);
 }
+window.traduzWaErro = traduzWaErro;
 
 function BootSplash() {
   return (
@@ -361,31 +362,61 @@ function App() {
 
   // envia UMA mensagem (real ou simulada) e registra na timeline do lead
   // metaInfo (opcional) = {metaName, metaLang, vars} → envia como template aprovado
+  // atualiza um campo de uma interação específica (status de entrega, wamid…)
+  const patchInteraction = useCallback((leadId, itId, patch, persist) => {
+    let updated = null;
+    setLeads((prev) => prev.map((l) => {
+      if (l.id !== leadId) return l;
+      const interacoes = (l.interacoes || []).map((it) => it.id === itId ? { ...it, ...patch } : it);
+      updated = { ...l, interacoes };
+      return updated;
+    }));
+    if (persist && REMOTE && updated) sync(() => SB.patchLead(Number(leadId), { interacoes: updated.interacoes }));
+  }, [sync]);
+
   const sendOne = useCallback((id, text, metaInfo) => {
     const lead = leadsRef.current.find((l) => l.id === id);
     if (!lead) return false;
     if (leadOptedOut(lead)) return false; // respeita opt-out (descadastro)
+    if (WA.isConnected() && !WA.canSendMore()) return false; // limite diário atingido
     const rendered = WA.render(text, lead);
     const meta = metaInfo && metaInfo.metaName ? WA.buildMeta(metaInfo, lead) : null;
+    const itId = uid();
+    const real = WA.isConnected();
     // envia e verifica o resultado real (avisa se a Meta recusar)
     Promise.resolve(WA.send(lead, rendered, meta)).then((r) => {
       if (r && r.ok === false) {
+        WA.logError(lead.id, lead.empresa, r.error);
         toast(`Falha ao enviar para ${lead.empresa}: ${traduzWaErro(r.error)}`, "error");
-      } else if (r && r.simulated && r.noPhone) {
-        toast(`${lead.empresa} sem número de WhatsApp — não enviado`, "error");
+        patchInteraction(id, itId, { status: "failed" }, true);
+      } else if (r && r.simulated) {
+        if (r.noPhone) { toast(`${lead.empresa} sem número de WhatsApp — não enviado`, "error"); }
+        else { // simula a progressão de status (enviado → entregue → lido)
+          setTimeout(() => patchInteraction(id, itId, { status: "delivered" }, false), 1300);
+          setTimeout(() => patchInteraction(id, itId, { status: "read" }, false), 2900);
+        }
+      } else if (r && r.ok && r.wamid) {
+        // grava o wamid p/ o webhook casar o status de entrega real
+        patchInteraction(id, itId, { wamid: r.wamid }, true);
       }
     }).catch(() => {});
-    const it = { id: uid(), data: TODAY, tipo: "WhatsApp", dir: "out", nota: rendered, tpl: (metaInfo && metaInfo.metaName) ? metaInfo.metaName : null };
+    if (real) WA.incDaily(1); // conta envio real para o limite diário
+    const it = { id: itId, data: TODAY, tipo: "WhatsApp", dir: "out", nota: rendered, status: "sent", tpl: (metaInfo && metaInfo.metaName) ? metaInfo.metaName : null };
     const interacoes = [...lead.interacoes, it];
     setLeads((prev) => prev.map((l) => l.id === id ? { ...l, interacoes, ultimoContato: TODAY } : l));
     if (REMOTE) sync(() => SB.patchLead(Number(id), { interacoes, ultimoContato: TODAY }));
     return true;
-  }, [sync]);
+  }, [sync, patchInteraction]);
 
   // processa 1 item da fila se já passou o intervalo desde o último envio
   const processQueue = useCallback(() => {
     const q = WA.getQueue();
     if (!q.length) { setQueueInfo({ len: 0, nextAt: 0 }); return; }
+    if (WA.isPaused()) { setQueueInfo({ len: q.length, nextAt: 0, paused: "manual" }); return; } // pausa manual
+    if (WA.isConnected() && !WA.canSendMore()) { // limite diário: pausa a fila até amanhã
+      setQueueInfo({ len: q.length, nextAt: 0, paused: "limite" });
+      return;
+    }
     const due = Date.now() >= WA.getLast() + WA.intervalMs();
     if (!due) { setQueueInfo({ len: q.length, nextAt: WA.getLast() + WA.intervalMs() }); return; }
     const head = q[0];
@@ -395,6 +426,9 @@ function App() {
     if (sent) WA.setLast(Date.now());
     setQueueInfo({ len: rest.length, nextAt: rest.length ? Date.now() + WA.intervalMs() : 0 });
   }, [sendOne]);
+
+  const processQueueRef = useRef(null);
+  useEffect(() => { processQueueRef.current = processQueue; }, [processQueue]);
 
   // tick: avança a fila enquanto o app está aberto
   useEffect(() => {
@@ -409,6 +443,23 @@ function App() {
     WA.clearQueue();
     setQueueInfo({ len: 0, nextAt: 0 });
     toast("Fila de envios cancelada", "info");
+  }, []);
+
+  const pauseQueue = useCallback(() => {
+    WA.setPaused(true);
+    setQueueInfo({ len: WA.getQueue().length, nextAt: 0, paused: "manual" });
+    toast("Fila pausada", "info");
+  }, []);
+  const resumeQueue = useCallback(() => {
+    WA.setPaused(false);
+    setQueueInfo({ len: WA.getQueue().length, nextAt: WA.nextAt() });
+    toast("Fila retomada", "success");
+    setTimeout(() => processQueueRef.current && processQueueRef.current(), 50);
+  }, []);
+  const sendQueueNow = useCallback(() => {
+    WA.setLast(0); // zera o intervalo → a próxima sai imediatamente
+    setTimeout(() => processQueueRef.current && processQueueRef.current(), 50);
+    toast("Enviando a próxima mensagem agora…", "info");
   }, []);
 
   // ---- cadência de follow-up: envia o próximo passo quando vence o prazo ----
@@ -432,9 +483,11 @@ function App() {
       if (st.templateId && st.templateId !== "auto") tpl = tpls.find((t) => t.id === st.templateId && t.metaName);
       if (!tpl) tpl = WA.approvedForLead(lead, tpls);
       if (!tpl) { WA.cancelSchedule(job.leadId); return; }
-      sendOne(lead.id, tpl.body, WA.metaInfo(tpl));
-      WA.scheduleNext(lead.id, job.step + 1); // agenda o próximo passo (ou encerra)
-      toast(`Follow-up ${job.step + 2}º contato → ${lead.empresa}`, "info");
+      const ok = sendOne(lead.id, tpl.body, WA.metaInfo(tpl));
+      if (ok) { // só avança a cadência se realmente enviou (respeita limite diário)
+        WA.scheduleNext(lead.id, job.step + 1);
+        toast(`Follow-up ${job.step + 2}º contato → ${lead.empresa}`, "info");
+      }
     });
   }, [sendOne]);
 
@@ -782,7 +835,7 @@ function App() {
             canDelete={canDelete} canCreate={canCreate} onBulkWhatsApp={openWhatsAppBulk}
             onImportLeads={importLeads}
             onDeleteLead={deleteLead} onDeleteLeads={deleteLeads} />}
-          {hasAccess && page === "inbox" && <InboxScreen leads={visibleLeads} onReply={replyWhatsApp} onMarkRead={markRead} onClearConversation={clearConversation} onSetOptOut={setOptOut} onOpenLead={openLead} />}
+          {hasAccess && page === "inbox" && <InboxScreen leads={visibleLeads} onReply={replyWhatsApp} onMarkRead={markRead} onClearConversation={clearConversation} onSetOptOut={setOptOut} onMoveLead={moveLead} onOpenLead={openLead} />}
           {hasAccess && page === "kanban" && <Kanban leads={visibleLeads} onOpenLead={openLead} onMoveLead={moveLead} />}
           {hasAccess && page === "agenda" && <Agenda tasks={visibleTasks} leads={visibleLeads} onToggleTask={toggleTask} onAddTask={addTask} onDeleteTask={deleteTask} />}
           {hasAccess && page === "reports" && <Reports leads={visibleLeads} />}
@@ -810,7 +863,7 @@ function App() {
         leads={waModal.leadIds.map((id) => leads.find((l) => l.id === id)).filter(Boolean)}
         onClose={closeWhatsApp} onSend={(ids, text) => sendWhatsApp(ids, text)} />
 
-      {queueInfo.len > 0 && <WhatsAppQueueBar info={queueInfo} onCancel={cancelQueue} />}
+      {queueInfo.len > 0 && <WhatsAppQueueBar info={queueInfo} onCancel={cancelQueue} onPause={pauseQueue} onResume={resumeQueue} onSendNow={sendQueueNow} />}
 
       <LeadFormModal lead={editLead} mode="edit" open={editLead != null}
         owners={ownerOptions}
