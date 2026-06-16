@@ -125,6 +125,47 @@ const WA = {
   },
   setAuto(a) { localStorage.setItem(WA_LS.auto, JSON.stringify(a)); },
 
+  // ---- opt-out (descadastro) ----
+  // palavras que indicam que o lead quer parar de receber mensagens
+  isOptOut(text) {
+    return /\b(sair|parar|pare|para de|para com|descadastr|me remov|remover|n[aã]o quero|n quero|stop|cancelar|nunca mais|desinscrever|me tira|tira meu)\b/i.test(text || "");
+  },
+  // remove da fila todos os itens de um lead (respondeu / opt-out)
+  removeFromQueue(leadId) {
+    const q = WA.getQueue();
+    const next = q.filter((it) => String(it.leadId) !== String(leadId));
+    if (next.length !== q.length) WA.setQueue(next);
+    return q.length - next.length;
+  },
+
+  // ---- follow-up automático (cadência) ----
+  // auto.followups = { enabled, steps:[{afterDays, templateId|'auto'}] }
+  defaultFollowups() {
+    return { enabled: false, steps: [{ afterDays: 2, templateId: "auto" }, { afterDays: 4, templateId: "auto" }] };
+  },
+  getFollowupCfg() { const a = WA.getAuto(); return a.followups || WA.defaultFollowups(); },
+  // agendamentos pendentes: [{fid, leadId, dueAt, step}]
+  getSchedule() { try { return JSON.parse(localStorage.getItem("nexus_wa_followups") || "[]") || []; } catch (e) { return []; } },
+  setSchedule(s) { localStorage.setItem("nexus_wa_followups", JSON.stringify(s)); },
+  cancelSchedule(leadId) {
+    const s = WA.getSchedule();
+    const next = s.filter((x) => String(x.leadId) !== String(leadId));
+    if (next.length !== s.length) WA.setSchedule(next);
+    return s.length - next.length;
+  },
+  // remove o job atual do lead e agenda o PRÓXIMO passo (se existir)
+  scheduleNext(leadId, step) {
+    const s = WA.getSchedule().filter((x) => String(x.leadId) !== String(leadId));
+    const cfg = WA.getFollowupCfg();
+    if (cfg.enabled && cfg.steps && step < cfg.steps.length) {
+      const st = cfg.steps[step];
+      const dueAt = Date.now() + Math.max(0, Number(st.afterDays) || 0) * 86400000;
+      s.push({ fid: "f" + Date.now() + "-" + leadId + "-" + step, leadId, dueAt, step });
+    }
+    WA.setSchedule(s);
+  },
+  dueSchedule(now) { return WA.getSchedule().filter((x) => (x.dueAt || 0) <= (now || Date.now())); },
+
   // ---- intervalo entre envios (anti-bloqueio) ----
   intervalMin() { const c = WA.getCfg(); return c.intervalMin != null ? c.intervalMin : 5; },
   intervalMs() { return Math.max(0, WA.intervalMin()) * 60000; },
@@ -641,6 +682,8 @@ function WhatsAppSettings({ onChanged }) {
           </div>
         )}
 
+        <FollowupConfig auto={auto} primeiroTpls={primeiroTpls} onSave={saveAuto} />
+
         <div className="wa-share">
           <div className="wa-share-text">
             <strong>Configuração compartilhada</strong>
@@ -687,6 +730,58 @@ function WhatsAppSettings({ onChanged }) {
           setEditing(null);
         }} />
     </React.Fragment>
+  );
+}
+
+// ---- Follow-up cadence config (cadência automática) ------------------------
+function FollowupConfig({ auto, primeiroTpls, onSave }) {
+  const cfg = auto.followups || WA.defaultFollowups();
+  const setCfg = (next) => onSave({ ...auto, followups: next });
+  const setStep = (i, patch) => {
+    const steps = cfg.steps.map((s, j) => j === i ? { ...s, ...patch } : s);
+    setCfg({ ...cfg, steps });
+  };
+  const addStep = () => {
+    const last = cfg.steps[cfg.steps.length - 1];
+    const afterDays = last ? Number(last.afterDays) + 3 : 2;
+    setCfg({ ...cfg, steps: [...cfg.steps, { afterDays, templateId: "auto" }] });
+  };
+  const removeStep = (i) => setCfg({ ...cfg, steps: cfg.steps.filter((_, j) => j !== i) });
+
+  return (
+    <div className="wa-followup">
+      <SettingsRow icon="activity" accent={COLORS.purple}
+        title="Sequência de follow-up automática"
+        desc="Se o lead não responder, reenvia automaticamente nos prazos abaixo. Para assim que ele responde."
+        control={<Toggle on={!!cfg.enabled} onChange={(v) => setCfg({ ...cfg, enabled: v })} />} />
+      {cfg.enabled && (
+        <div className="wa-followup-steps">
+          {cfg.steps.map((s, i) => (
+            <div className="wa-fu-step" key={i}>
+              <span className="wa-fu-num mono">{i + 2}º</span>
+              <div className="wa-fu-when">
+                <span className="field-hint">após</span>
+                <input className="input mono wa-fu-days" type="number" min="1" value={s.afterDays}
+                  onChange={(e) => setStep(i, { afterDays: Math.max(1, Number(e.target.value) || 1) })} />
+                <span className="field-hint">dias</span>
+              </div>
+              <div className="select-wrap wa-fu-tpl">
+                <select className="select" value={s.templateId || "auto"} onChange={(e) => setStep(i, { templateId: e.target.value })}>
+                  <option value="auto">Automático por segmento</option>
+                  {primeiroTpls.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+                <Icon name="chevron-down" size={15} className="select-chevron" />
+              </div>
+              <button className="row-trash" title="Remover passo" onClick={() => removeStep(i)}><Icon name="trash" size={14} /></button>
+            </div>
+          ))}
+          {cfg.steps.length < 4 && (
+            <button className="btn btn-ghost btn-sm" onClick={addStep}><Icon name="plus" size={14} /> Adicionar passo</button>
+          )}
+          <p className="accent-note">A cadência avança com o CRM aberto e respeita o intervalo anti-bloqueio. Cada passo usa um template aprovado pela Meta.</p>
+        </div>
+      )}
+    </div>
   );
 }
 

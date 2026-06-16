@@ -690,6 +690,51 @@ input[type="date"].input, input[type="time"].input { color-scheme: dark; }
 .inbox-convo:hover .inbox-convo-del { opacity: 1; }
 .inbox-convo-del:hover { background: rgba(239,68,68,0.14); color: var(--red); border-color: rgba(239,68,68,0.3); }
 .inbox-thread-del:hover { background: rgba(239,68,68,0.14); color: var(--red); border-color: rgba(239,68,68,0.3); }
+
+/* ============================================================
+   Opt-out (descadastro)
+   ============================================================ */
+.inbox-optout-btn:hover { color: var(--amber); border-color: rgba(245,158,11,0.4); }
+.inbox-optout-banner { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 9px 22px; font-size: 12.5px; font-weight: 600; color: var(--amber); background: rgba(245,158,11,0.1); border-bottom: 1px solid var(--border); }
+
+/* ============================================================
+   Follow-up cadence config
+   ============================================================ */
+.wa-followup { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
+.wa-followup-steps { padding: 4px 0 8px; display: flex; flex-direction: column; gap: 10px; }
+.wa-fu-step { display: flex; align-items: center; gap: 10px; }
+.wa-fu-num { width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; background: rgba(139,92,246,0.14); color: var(--purple); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+.wa-fu-when { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.wa-fu-days { width: 56px; text-align: center; padding: 8px 6px; }
+.wa-fu-tpl { flex: 1; }
+.wa-fu-tpl .select { width: 100%; }
+.wa-fu-step .row-trash { flex-shrink: 0; }
+
+/* ============================================================
+   Reports — Desempenho da Prospecção
+   ============================================================ */
+.prosp-empty, .prosp-empty-sm { color: var(--text-3); font-size: 13.5px; padding: 8px 0; }
+.prosp-empty-sm { font-size: 12.5px; padding: 16px; text-align: center; }
+.prosp-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+.prosp-kpi { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 16px; }
+.prosp-kpi-val { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+.prosp-kpi-val small { font-size: 14px; color: var(--text-3); }
+.prosp-kpi-lbl { font-size: 12px; color: var(--text-3); margin-top: 7px; }
+.prosp-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.prosp-table-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3); margin-bottom: 10px; }
+.prosp-table { font-size: 12.5px; }
+.prosp-table thead th { padding: 9px 10px; font-size: 10.5px; }
+.prosp-table tbody td { padding: 9px 10px; }
+.prosp-table .prosp-lbl { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+.prosp-bar-cell { display: flex; align-items: center; gap: 8px; min-width: 110px; }
+.prosp-bar-track { flex: 1; height: 7px; background: var(--surface-3); border-radius: 999px; overflow: hidden; }
+.prosp-bar-fill { height: 100%; border-radius: 999px; transition: width 0.3s ease; }
+.prosp-bar-val { font-size: 11.5px; font-weight: 700; width: 36px; text-align: right; }
+
+@media (max-width: 1100px) {
+  .prosp-kpis { grid-template-columns: repeat(2, 1fr); }
+  .prosp-tables { grid-template-columns: 1fr; }
+}
 .inbox-convo:hover { background: var(--surface-2); }
 .inbox-convo.active { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--blue); }
 .inbox-convo.unread .inbox-convo-name { font-weight: 700; }

@@ -291,9 +291,21 @@ function App() {
         let novas = 0, quem = "";
         fresh.forEach((l) => {
           const before = prevMap[l.id] || 0;
-          if ((l.unread || 0) > before) { novas += (l.unread - before); quem = l.empresa; }
+          if ((l.unread || 0) > before) {
+            novas += (l.unread - before); quem = l.empresa;
+            // lead respondeu → para automação: limpa fila e cadência desse lead
+            WA.removeFromQueue(l.id);
+            WA.cancelSchedule(l.id);
+            // opt-out automático por palavra-chave na última resposta
+            const lastIn = (l.interacoes || []).slice().reverse().find((it) => it.dir === "in");
+            if (lastIn && WA.isOptOut(lastIn.nota) && !leadOptedOut(l)) {
+              l.interacoes = [...(l.interacoes || []), { id: uid(), data: TODAY, tipo: "Sistema", kind: "optout", nota: "Opt-out automático — o cliente pediu para parar." }];
+              if (REMOTE) sync(() => SB.patchLead(l.id, { interacoes: l.interacoes }));
+            }
+          }
         });
         setLeads(fresh);
+        setQueueInfo({ len: WA.getQueue().length, nextAt: WA.nextAt() });
         if (novas > 0) {
           toast(novas === 1 ? `💬 ${quem} respondeu no WhatsApp` : `💬 ${novas} novas respostas no WhatsApp`, "success");
         }
@@ -352,6 +364,7 @@ function App() {
   const sendOne = useCallback((id, text, metaInfo) => {
     const lead = leadsRef.current.find((l) => l.id === id);
     if (!lead) return false;
+    if (leadOptedOut(lead)) return false; // respeita opt-out (descadastro)
     const rendered = WA.render(text, lead);
     const meta = metaInfo && metaInfo.metaName ? WA.buildMeta(metaInfo, lead) : null;
     // envia e verifica o resultado real (avisa se a Meta recusar)
@@ -362,7 +375,7 @@ function App() {
         toast(`${lead.empresa} sem número de WhatsApp — não enviado`, "error");
       }
     }).catch(() => {});
-    const it = { id: uid(), data: TODAY, tipo: "WhatsApp", nota: rendered };
+    const it = { id: uid(), data: TODAY, tipo: "WhatsApp", dir: "out", nota: rendered, tpl: (metaInfo && metaInfo.metaName) ? metaInfo.metaName : null };
     const interacoes = [...lead.interacoes, it];
     setLeads((prev) => prev.map((l) => l.id === id ? { ...l, interacoes, ultimoContato: TODAY } : l));
     if (REMOTE) sync(() => SB.patchLead(Number(id), { interacoes, ultimoContato: TODAY }));
@@ -397,6 +410,54 @@ function App() {
     setQueueInfo({ len: 0, nextAt: 0 });
     toast("Fila de envios cancelada", "info");
   }, []);
+
+  // ---- cadência de follow-up: envia o próximo passo quando vence o prazo ----
+  const processFollowups = useCallback(() => {
+    const cfg = WA.getFollowupCfg();
+    if (!cfg.enabled) return;
+    const due = WA.dueSchedule(Date.now());
+    if (!due.length) return;
+    const cur = leadsRef.current;
+    const tpls = WA.getTemplates();
+    const PAROU = ["Fechado", "Perdido", "Reunião Agendada", "Proposta Enviada"];
+    due.forEach((job) => {
+      const lead = cur.find((l) => l.id === job.leadId);
+      const respondeu = lead && ((lead.unread || 0) > 0 || (lead.interacoes || []).some((it) => it.dir === "in"));
+      // cancela a cadência se o lead sumiu, respondeu, pediu opt-out ou avançou no funil
+      if (!lead || respondeu || leadOptedOut(lead) || PAROU.includes(lead.status)) {
+        WA.cancelSchedule(job.leadId); return;
+      }
+      const st = cfg.steps[job.step] || {};
+      let tpl = null;
+      if (st.templateId && st.templateId !== "auto") tpl = tpls.find((t) => t.id === st.templateId && t.metaName);
+      if (!tpl) tpl = WA.approvedForLead(lead, tpls);
+      if (!tpl) { WA.cancelSchedule(job.leadId); return; }
+      sendOne(lead.id, tpl.body, WA.metaInfo(tpl));
+      WA.scheduleNext(lead.id, job.step + 1); // agenda o próximo passo (ou encerra)
+      toast(`Follow-up ${job.step + 2}º contato → ${lead.empresa}`, "info");
+    });
+  }, [sendOne]);
+
+  useEffect(() => {
+    processFollowups();
+    const t = setInterval(processFollowups, 30000);
+    const onVis = () => { if (!document.hidden) processFollowups(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
+  }, [processFollowups]);
+
+  // marca/desmarca opt-out (descadastro) de um lead via interação-marcador
+  const setOptOut = useCallback((id, val) => {
+    const lead = leadsRef.current.find((l) => l.id === id);
+    if (!lead) return;
+    let interacoes;
+    if (val) interacoes = [...lead.interacoes, { id: uid(), data: TODAY, tipo: "Sistema", kind: "optout", nota: "Lead descadastrado — não receberá mais mensagens." }];
+    else interacoes = lead.interacoes.filter((it) => it.kind !== "optout");
+    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, interacoes } : l));
+    if (val) { WA.removeFromQueue(id); WA.cancelSchedule(id); setQueueInfo({ len: WA.getQueue().length, nextAt: WA.nextAt() }); }
+    toast(val ? `${lead.empresa} marcado como opt-out` : `Opt-out removido de ${lead.empresa}`, val ? "error" : "success");
+    if (REMOTE) sync(() => SB.patchLead(Number(id), { interacoes }));
+  }, [sync]);
 
   // dispara para 1+ leads, respeitando o intervalo configurado
   const logWhatsApp = useCallback((ids, text, tpl) => {
@@ -441,6 +502,7 @@ function App() {
     if (!tpl) { toast("Nenhum template aprovado disponível para o 1º contato", "error"); return; }
     const r = logWhatsApp([lead.id], tpl.body, tpl);
     if (r) toast(`WhatsApp de 1º contato ${r.conn ? "enviado" : "(simulação)"} → ${lead.empresa}`, "info");
+    WA.scheduleNext(lead.id, 0); // agenda 1º follow-up (no-op se cadência desligada)
   }, [logWhatsApp]);
 
   const createLead = useCallback((form) => {
@@ -492,6 +554,7 @@ function App() {
       return tpl ? { leadId: lead.id, text: tpl.body, meta: WA.metaInfo(tpl) } : null;
     }).filter(Boolean);
     if (!items.length) return;
+    items.forEach((it) => WA.scheduleNext(it.leadId, 0)); // agenda follow-ups (no-op se desligado)
     const gapMs = WA.intervalMs();
     if (gapMs === 0) {
       items.forEach((it) => sendOne(it.leadId, it.text, it.meta));
@@ -719,7 +782,7 @@ function App() {
             canDelete={canDelete} canCreate={canCreate} onBulkWhatsApp={openWhatsAppBulk}
             onImportLeads={importLeads}
             onDeleteLead={deleteLead} onDeleteLeads={deleteLeads} />}
-          {hasAccess && page === "inbox" && <InboxScreen leads={visibleLeads} onReply={replyWhatsApp} onMarkRead={markRead} onClearConversation={clearConversation} onOpenLead={openLead} />}
+          {hasAccess && page === "inbox" && <InboxScreen leads={visibleLeads} onReply={replyWhatsApp} onMarkRead={markRead} onClearConversation={clearConversation} onSetOptOut={setOptOut} onOpenLead={openLead} />}
           {hasAccess && page === "kanban" && <Kanban leads={visibleLeads} onOpenLead={openLead} onMoveLead={moveLead} />}
           {hasAccess && page === "agenda" && <Agenda tasks={visibleTasks} leads={visibleLeads} onToggleTask={toggleTask} onAddTask={addTask} onDeleteTask={deleteTask} />}
           {hasAccess && page === "reports" && <Reports leads={visibleLeads} />}
@@ -738,6 +801,7 @@ function App() {
           canDelete={canDelete} canCreate={canCreate}
           onWhatsApp={(id) => openWhatsAppBulk([id])}
           onReply={replyWhatsApp}
+          onSetOptOut={setOptOut}
           onDelete={deleteLead}
           onEdit={(l) => { setEditLead(l); setOpenLeadId(null); }} />
       </Drawer>

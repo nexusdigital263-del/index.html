@@ -82,6 +82,40 @@ function CityBars({ data }) {
   );
 }
 
+function ProspTable({ rows, mono }) {
+  if (!rows || !rows.length) return <div className="prosp-empty-sm">Sem dados.</div>;
+  const maxTaxa = Math.max(100, ...rows.map((r) => r.taxa));
+  return (
+    <table className="data-table prosp-table">
+      <thead>
+        <tr>
+          <th>{mono ? "Template" : "Segmento"}</th>
+          <th className="num">Enviados</th>
+          <th className="num">Resp.</th>
+          <th>Taxa</th>
+          <th className="num">Tempo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.label}>
+            <td className={mono ? "mono prosp-lbl" : ""}>{r.label}</td>
+            <td className="num mono">{r.enviados}</td>
+            <td className="num mono">{r.respostas}</td>
+            <td>
+              <div className="prosp-bar-cell">
+                <div className="prosp-bar-track"><div className="prosp-bar-fill" style={{ width: (r.taxa / maxTaxa * 100) + "%", background: r.taxa >= 30 ? COLORS.green : r.taxa >= 15 ? COLORS.amber : COLORS.red }}></div></div>
+                <span className="prosp-bar-val mono">{r.taxa}%</span>
+              </div>
+            </td>
+            <td className="num mono">{r.tempo != null ? r.tempo + "d" : "—"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function Reports({ leads }) {
   const seg = useMemo(() => segmentData(leads), [leads]);
   const city = useMemo(() => cityData(leads), [leads]);
@@ -91,8 +125,47 @@ function Reports({ leads }) {
     fechamentos: a.fechamentos + s.fechamentos, receita: a.receita + s.receita,
   }), { leads: 0, reunioes: 0, fechamentos: 0, receita: 0 }), [summary]);
 
+  const prosp = useMemo(() => prospeccaoMetrics(leads), [leads]);
+
   return (
     <div className="screen-pad fade-in">
+      <Panel title="Desempenho da Prospecção" subtitle="Taxa de resposta do WhatsApp por segmento e por mensagem">
+        {prosp.total.enviados === 0 ? (
+          <div className="prosp-empty">Nenhuma mensagem de prospecção enviada ainda. Os indicadores aparecem aqui assim que você disparar o 1º contato.</div>
+        ) : (
+          <React.Fragment>
+            <div className="prosp-kpis">
+              <div className="prosp-kpi">
+                <div className="prosp-kpi-val mono">{prosp.total.enviados}</div>
+                <div className="prosp-kpi-lbl">Leads contatados</div>
+              </div>
+              <div className="prosp-kpi">
+                <div className="prosp-kpi-val mono">{prosp.total.respostas}</div>
+                <div className="prosp-kpi-lbl">Responderam</div>
+              </div>
+              <div className="prosp-kpi">
+                <div className="prosp-kpi-val mono" style={{ color: COLORS.green }}>{prosp.total.taxa}%</div>
+                <div className="prosp-kpi-lbl">Taxa de resposta</div>
+              </div>
+              <div className="prosp-kpi">
+                <div className="prosp-kpi-val mono">{prosp.total.tempo != null ? prosp.total.tempo : "—"}<small>{prosp.total.tempo != null ? " d" : ""}</small></div>
+                <div className="prosp-kpi-lbl">Tempo médio até resposta</div>
+              </div>
+            </div>
+            <div className="prosp-tables">
+              <div className="prosp-table-block">
+                <div className="prosp-table-title">Por segmento</div>
+                <ProspTable rows={prosp.segmentos} />
+              </div>
+              <div className="prosp-table-block">
+                <div className="prosp-table-title">Por mensagem (template)</div>
+                <ProspTable rows={prosp.templates} mono />
+              </div>
+            </div>
+          </React.Fragment>
+        )}
+      </Panel>
+
       <div className="reports-top">
         <Panel title="Leads por Segmento" subtitle="Distribuição da carteira">
           <div className="seg-report">

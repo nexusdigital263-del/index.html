@@ -16,7 +16,7 @@ function lastThreadDate(msgs) {
   return msgs.length ? msgs[msgs.length - 1].data || "" : "";
 }
 
-function InboxScreen({ leads, onReply, onMarkRead, onClearConversation, onOpenLead }) {
+function InboxScreen({ leads, onReply, onMarkRead, onClearConversation, onSetOptOut, onOpenLead }) {
   const convos = iMemo(() => {
     return leads
       .map((l) => {
@@ -163,11 +163,18 @@ function InboxScreen({ leads, onReply, onMarkRead, onClearConversation, onOpenLe
                 <button className="btn btn-ghost btn-sm" onClick={() => onOpenLead(sel.lead.id)}>
                   <Icon name="external-link" size={14} /> Abrir lead
                 </button>
+                {onSetOptOut && (leadOptedOut(sel.lead)
+                  ? <button className="btn btn-ghost btn-sm" title="Reativar envios" onClick={() => onSetOptOut(sel.lead.id, false)}><Icon name="check" size={14} /> Reativar</button>
+                  : <button className="btn btn-ghost btn-sm inbox-optout-btn" title="Não enviar mais mensagens" onClick={() => { if (window.confirm(`Marcar "${sel.lead.empresa}" como opt-out? Ele não receberá mais mensagens automáticas.`)) onSetOptOut(sel.lead.id, true); }}><Icon name="shield" size={14} /> Opt-out</button>)}
                 <button className="icon-btn inbox-thread-del" title="Excluir conversa" onClick={() => removeConvo(sel.lead)}>
                   <Icon name="trash" size={16} />
                 </button>
               </div>
             </header>
+
+            {leadOptedOut(sel.lead) && (
+              <div className="inbox-optout-banner"><Icon name="shield" size={14} /> Lead descadastrado (opt-out) — envios automáticos estão bloqueados para este contato.</div>
+            )}
 
             <div className="inbox-chat" ref={chatRef}>
               {sel.msgs.map((m) => {

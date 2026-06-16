@@ -285,7 +285,7 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete,
 }
 
 // ---- Lead detail drawer content -------------------------------------------
-function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDelete, canCreate, onWhatsApp, onReply }) {
+function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDelete, canCreate, onWhatsApp, onReply, onSetOptOut }) {
   const [tipo, setTipo] = useState("Ligação");
   const [nota, setNota] = useState("");
   const [reply, setReply] = useState("");
@@ -303,8 +303,9 @@ function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDele
     setReply("");
   };
 
-  const sorted = [...lead.interacoes].sort((a, b) => (a.data || "").localeCompare(b.data || ""));
+  const sorted = [...lead.interacoes].filter((it) => it.kind !== "optout").sort((a, b) => (a.data || "").localeCompare(b.data || ""));
   const waNum = (lead.whatsapp || "").replace(/\D/g, "");
+  const optedOut = leadOptedOut(lead);
 
   return (
     <div className="lead-detail">
@@ -403,6 +404,9 @@ function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDele
           }}><Icon name="trash" size={15} /> Excluir</button>
         ) : <span></span>}
         <div className="drawer-foot-right">
+          {onSetOptOut && (optedOut
+            ? <button className="btn btn-ghost" title="Reativar envios" onClick={() => onSetOptOut(lead.id, false)}><Icon name="check" size={15} /> Reativar envios</button>
+            : <button className="btn btn-ghost" title="Não enviar mais mensagens" onClick={() => { if (window.confirm(`Marcar "${lead.empresa}" como opt-out? Não receberá mais mensagens automáticas.`)) onSetOptOut(lead.id, true); }}><Icon name="shield" size={15} /> Opt-out</button>)}
           <button className="btn btn-ghost" onClick={onClose}>Fechar</button>
           <button className="btn btn-primary" onClick={() => onEdit(lead)}><Icon name="edit" size={15} /> Editar Lead</button>
         </div>

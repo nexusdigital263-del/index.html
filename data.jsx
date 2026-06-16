@@ -387,11 +387,54 @@ function recentActivity(leads, limit = 8) {
   const all = [];
   leads.forEach((l) => {
     l.interacoes.forEach((it) => {
+      if (it.kind === "optout") return; // marcadores de sistema não entram na atividade
       all.push({ ...it, empresa: l.empresa, leadId: l.id });
     });
   });
   all.sort((a, b) => b.data.localeCompare(a.data));
   return all.slice(0, limit);
+}
+
+// lead pediu para não receber mais mensagens (opt-out / descadastro)
+function leadOptedOut(lead) {
+  return !!(lead && (lead.interacoes || []).some((it) => it.kind === "optout"));
+}
+
+// métricas de prospecção: taxa de resposta e tempo até resposta, por segmento e por template
+function prospeccaoMetrics(leads) {
+  const daysBetween = (a, b) => {
+    const da = new Date(a + "T00:00:00"), db = new Date(b + "T00:00:00");
+    return Math.max(0, Math.round((db - da) / 86400000));
+  };
+  const bySeg = {}, byTpl = {};
+  let totEnviados = 0, totRespond = 0, somaDias = 0, comResposta = 0;
+  leads.forEach((l) => {
+    const outs = (l.interacoes || []).filter((it) => it.tipo === "WhatsApp" && it.dir !== "in");
+    if (!outs.length) return;
+    const firstOut = outs.reduce((a, b) => (a.data <= b.data ? a : b));
+    const ins = (l.interacoes || []).filter((it) => it.dir === "in" && it.data >= firstOut.data);
+    const replied = ins.length > 0;
+    const dias = replied ? daysBetween(firstOut.data, ins.reduce((a, b) => (a.data <= b.data ? a : b)).data) : null;
+    totEnviados++; if (replied) { totRespond++; if (dias != null) { somaDias += dias; comResposta++; } }
+    // por segmento
+    const seg = l.segmento || "Outros";
+    (bySeg[seg] = bySeg[seg] || { seg, enviados: 0, respostas: 0, somaDias: 0, comDias: 0 });
+    bySeg[seg].enviados++; if (replied) { bySeg[seg].respostas++; if (dias != null) { bySeg[seg].somaDias += dias; bySeg[seg].comDias++; } }
+    // por template (usa o nome do template Meta gravado no envio, senão "—")
+    const tplName = (firstOut.tpl || "—");
+    (byTpl[tplName] = byTpl[tplName] || { tpl: tplName, enviados: 0, respostas: 0, somaDias: 0, comDias: 0 });
+    byTpl[tplName].enviados++; if (replied) { byTpl[tplName].respostas++; if (dias != null) { byTpl[tplName].somaDias += dias; byTpl[tplName].comDias++; } }
+  });
+  const fmtRow = (r, key) => ({
+    label: r[key], enviados: r.enviados, respostas: r.respostas,
+    taxa: r.enviados ? Math.round((r.respostas / r.enviados) * 100) : 0,
+    tempo: r.comDias ? +(r.somaDias / r.comDias).toFixed(1) : null,
+  });
+  return {
+    total: { enviados: totEnviados, respostas: totRespond, taxa: totEnviados ? Math.round((totRespond / totEnviados) * 100) : 0, tempo: comResposta ? +(somaDias / comResposta).toFixed(1) : null },
+    segmentos: Object.values(bySeg).map((r) => fmtRow(r, "seg")).sort((a, b) => b.enviados - a.enviados),
+    templates: Object.values(byTpl).map((r) => fmtRow(r, "tpl")).sort((a, b) => b.enviados - a.enviados),
+  };
 }
 
 function kpis(leads) {
@@ -423,5 +466,6 @@ Object.assign(window, {
   ACCENT_HOVER, USERS, ROLE_META, ROLE_PERMS, can, userInfo,
   LEADS, TASKS, MONTHLY,
   funnelData, segmentData, cityData, segmentSummary, recentActivity, kpis,
+  leadOptedOut, prospeccaoMetrics,
   fmtBRL, fmtBRLk, fmtDate, fmtDateLong, FUNNEL_LABEL,
 });
