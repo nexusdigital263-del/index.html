@@ -4,6 +4,7 @@
 const PAGE_META = {
   dashboard: { title: "Dashboard",     subtitle: "Visão geral da sua prospecção" },
   leads:     { title: "Leads",         subtitle: "Sua carteira de prospects" },
+  inbox:     { title: "Conversas",     subtitle: "Respostas da prospecção no WhatsApp" },
   kanban:    { title: "Kanban",        subtitle: "Arraste os cards entre as etapas do funil" },
   agenda:    { title: "Agenda",        subtitle: "Tarefas e follow-ups" },
   reports:   { title: "Relatórios",    subtitle: "Métricas e desempenho comercial" },
@@ -266,6 +267,15 @@ function App() {
   }, [sync]);
   const closeDrawer = useCallback(() => setOpenLeadId(null), []);
 
+  // marca respostas como lidas sem abrir o drawer (usado pela Caixa de Entrada)
+  const markRead = useCallback((id) => {
+    const lead = leadsRef.current.find((l) => l.id === id);
+    if (lead && lead.unread > 0) {
+      setLeads((prev) => prev.map((l) => l.id === id ? { ...l, unread: 0 } : l));
+      if (REMOTE) sync(() => SB.markLeadRead(id));
+    }
+  }, [sync]);
+
   // ---- polling de respostas recebidas (modo Supabase) ----
   useEffect(() => {
     if (!REMOTE || !currentId) return;
@@ -303,6 +313,18 @@ function App() {
     setLeads((prev) => prev.map((l) => l.id === id ? updated : l));
     toast("Interação registrada", "success");
     if (REMOTE) sync(() => SB.patchLead(id, { interacoes: updated.interacoes, ultimoContato: TODAY }));
+  }, [sync]);
+
+  // remove o histórico de conversa (mensagens de WhatsApp + respostas recebidas)
+  // de um lead, sem excluir o lead em si. Usado pela aba Conversas.
+  const clearConversation = useCallback((id) => {
+    const cur = leadsRef.current.find((l) => l.id === id);
+    if (!cur) return;
+    const interacoes = (cur.interacoes || []).filter((it) => it.dir !== "in" && it.tipo !== "WhatsApp");
+    const updated = { ...cur, interacoes, unread: 0 };
+    setLeads((prev) => prev.map((l) => l.id === id ? updated : l));
+    toast(`Conversa com "${cur.empresa}" excluída`, "error");
+    if (REMOTE) sync(() => SB.patchLead(Number(id), { interacoes, unread: 0 }));
   }, [sync]);
 
   const moveLead = useCallback((id, status) => {
@@ -409,9 +431,14 @@ function App() {
     const auto = WA.getAuto();
     if (!auto.onNew || lead.status !== "Novo") return;
     const tpls = WA.getTemplates();
-    let tpl = (auto.templateId && auto.templateId !== "auto") ? tpls.find((t) => t.id === auto.templateId) : null;
-    if (!tpl) tpl = WA.templateForLead(lead, tpls);
-    if (!tpl) return;
+    // 1º contato automático SEMPRE com template aprovado (texto livre é recusado pela Meta)
+    let tpl = null;
+    if (auto.templateId && auto.templateId !== "auto") {
+      const chosen = tpls.find((t) => t.id === auto.templateId);
+      if (chosen && chosen.metaName) tpl = chosen;
+    }
+    if (!tpl) tpl = WA.approvedForLead(lead, tpls);
+    if (!tpl) { toast("Nenhum template aprovado disponível para o 1º contato", "error"); return; }
     const r = logWhatsApp([lead.id], tpl.body, tpl);
     if (r) toast(`WhatsApp de 1º contato ${r.conn ? "enviado" : "(simulação)"} → ${lead.empresa}`, "info");
   }, [logWhatsApp]);
@@ -455,8 +482,13 @@ function App() {
     const tpls = WA.getTemplates();
     const novos = createdLeads.filter((l) => l.status === "Novo");
     const items = novos.map((lead) => {
-      let tpl = (auto.templateId && auto.templateId !== "auto") ? tpls.find((t) => t.id === auto.templateId) : null;
-      if (!tpl) tpl = WA.templateForLead(lead, tpls);
+      // 1º contato em massa SEMPRE com template aprovado pela Meta
+      let tpl = null;
+      if (auto.templateId && auto.templateId !== "auto") {
+        const chosen = tpls.find((t) => t.id === auto.templateId);
+        if (chosen && chosen.metaName) tpl = chosen;
+      }
+      if (!tpl) tpl = WA.approvedForLead(lead, tpls);
       return tpl ? { leadId: lead.id, text: tpl.body, meta: WA.metaInfo(tpl) } : null;
     }).filter(Boolean);
     if (!items.length) return;
@@ -647,6 +679,8 @@ function App() {
 
   const ownerOptions = useMemo(() => users.filter((u) => u.role !== "Admin" || true), [users]);
 
+  const unreadTotal = useMemo(() => visibleLeads.reduce((s, l) => s + (l.unread || 0), 0), [visibleLeads]);
+
   const openLeadObj = useMemo(() => leads.find((l) => l.id === openLeadId) || null, [leads, openLeadId]);
   const meta = PAGE_META[page] || PAGE_META.dashboard;
   const hasAccess = role ? can(role, page) : false;
@@ -670,7 +704,7 @@ function App() {
   return (
     <div className={"app-shell" + (collapsed ? " collapsed" : "")}>
       <Sidebar active={page} onNavigate={(p) => { setPage(p); setCollapsed(false); }}
-        collapsed={collapsed} onLogout={logout} user={currentUser} />
+        collapsed={collapsed} onLogout={logout} user={currentUser} badges={{ inbox: unreadTotal }} />
       <main className="main-area">
         <PageHeader title={meta.title} subtitle={meta.subtitle}
           onToggleSidebar={() => setCollapsed((c) => !c)}
@@ -685,6 +719,7 @@ function App() {
             canDelete={canDelete} canCreate={canCreate} onBulkWhatsApp={openWhatsAppBulk}
             onImportLeads={importLeads}
             onDeleteLead={deleteLead} onDeleteLeads={deleteLeads} />}
+          {hasAccess && page === "inbox" && <InboxScreen leads={visibleLeads} onReply={replyWhatsApp} onMarkRead={markRead} onClearConversation={clearConversation} onOpenLead={openLead} />}
           {hasAccess && page === "kanban" && <Kanban leads={visibleLeads} onOpenLead={openLead} onMoveLead={moveLead} />}
           {hasAccess && page === "agenda" && <Agenda tasks={visibleTasks} leads={visibleLeads} onToggleTask={toggleTask} onAddTask={addTask} onDeleteTask={deleteTask} />}
           {hasAccess && page === "reports" && <Reports leads={visibleLeads} />}

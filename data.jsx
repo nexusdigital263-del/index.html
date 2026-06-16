@@ -77,9 +77,9 @@ const ROLE_META = {
 // Permission keys per role. Nav keys (dashboard/leads/kanban/agenda/reports/settings/users)
 // double as page-access permissions.
 const ROLE_PERMS = {
-  "Admin":    ["dashboard", "leads", "kanban", "agenda", "reports", "settings", "users", "viewAll", "create", "edit", "delete"],
-  "Gerente":  ["dashboard", "leads", "kanban", "agenda", "reports", "viewAll", "create", "edit", "delete"],
-  "Vendedor": ["dashboard", "leads", "kanban", "agenda", "create", "edit"],
+  "Admin":    ["dashboard", "leads", "inbox", "kanban", "agenda", "reports", "settings", "users", "viewAll", "create", "edit", "delete"],
+  "Gerente":  ["dashboard", "leads", "inbox", "kanban", "agenda", "reports", "viewAll", "create", "edit", "delete"],
+  "Vendedor": ["dashboard", "leads", "inbox", "kanban", "agenda", "create", "edit"],
 };
 function can(role, perm) { return (ROLE_PERMS[role] || []).includes(perm); }
 

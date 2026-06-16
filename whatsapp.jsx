@@ -29,8 +29,12 @@ function SettingsRow({ icon, title, desc, control, accent }) {
 }
 
 const WA_LS = { cfg: "nexus_wa_cfg", tpl: "nexus_wa_tpl", auto: "nexus_wa_auto" };
-const WA_TPL_VERSION = 3; // bump → migra modelos padrão preservando os personalizados
-const WA_OLD_DEFAULT_IDS = ["tpl-generico", "tpl-odonto", "tpl-concess", "tpl-delivery", "tpl-natural", "tpl-followup"];
+const WA_TPL_VERSION = 4; // bump → migra modelos padrão preservando os personalizados
+const WA_OLD_DEFAULT_IDS = [
+  "tpl-generico", "tpl-odonto", "tpl-concess", "tpl-delivery", "tpl-natural", "tpl-followup",
+  // v3 default ids (substituídos na v4)
+  "meta-odonto", "meta-varejo-delivery", "meta-varejo-natural", "meta-empresas", "meta-saude", "meta-followup",
+];
 
 // ---- default message templates ---------------------------------------------
 // Conectados aos TEMPLATES APROVADOS na Meta (metaName) + ordem das variáveis (vars).
@@ -43,22 +47,32 @@ const WA_DEFAULT_TEMPLATES = [
     body: "Oi! Aqui é {{responsavel}}, da VitalHub. Trabalhamos com clínicas odontológicas em {{cidade}} e ajudamos a aumentar significativamente o número de agendamentos sem aumentar proporcionalmente o investimento em mídia, apenas ajustando a geração de demanda e o processo de acompanhamento dos pacientes. Posso te mostrar em 5 minutos como funcionaria na {{empresa}}? Fico no aguardo!",
   },
   {
-    id: "meta-varejo-delivery", name: "1º contato — Delivery (Varejo)", segmento: "Delivery", primeiro: true,
+    id: "meta-veiculos", name: "1º contato — Concessionária / Veículos", segmento: "Concessionária", primeiro: true,
+    metaName: "veiculos_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
+    body: "Olá, {{contato}}. Tudo bem? Trabalho ajudando concessionárias e revendas a venderem mais sem depender só do movimento de loja: estruturamos a geração de leads qualificados e o acompanhamento de quem pede test-drive, avaliação ou financiamento, para que menos oportunidades esfriem no caminho. Identifiquei alguns pontos no mercado local que costumam aumentar as vendas. Posso compartilhar com você?",
+  },
+  {
+    id: "meta-delivery", name: "1º contato — Delivery / Restaurantes", segmento: "Delivery", primeiro: true,
+    metaName: "delivery_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
+    body: "Olá, {{contato}}. Tudo bem? Trabalho ajudando negócios de delivery e food service a venderem mais sem depender só dos aplicativos, organizando a recompra dos clientes que já pediram e a captação de novos pedidos diretos. Levantei algumas observações sobre o mercado local que costumam aumentar o faturamento e reduzir a dependência de comissões. Posso compartilhar com você?",
+  },
+  {
+    id: "meta-natural", name: "1º contato — Loja Natural (Varejo)", segmento: "Loja Natural", primeiro: true,
     metaName: "varejo_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
     body: "Olá, {{contato}}.\n\nTudo bem?\n\nTrabalho com projetos voltados para crescimento comercial e fortalecimento da presença digital de empresas do varejo.\n\nAnalisando o mercado local, identificamos algumas oportunidades que costumam impactar diretamente a geração de vendas e o aproveitamento dos clientes que já demonstram interesse.\n\nGostaria de compartilhar algumas observações que podem agregar valor ao negócio.\n\nPosso enviar?",
   },
   {
-    id: "meta-varejo-natural", name: "1º contato — Loja Natural (Varejo)", segmento: "Loja Natural", primeiro: true,
-    metaName: "varejo_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
-    body: "Olá, {{contato}}.\n\nTudo bem?\n\nTrabalho com projetos voltados para crescimento comercial e fortalecimento da presença digital de empresas do varejo.\n\nAnalisando o mercado local, identificamos algumas oportunidades que costumam impactar diretamente a geração de vendas e o aproveitamento dos clientes que já demonstram interesse.\n\nGostaria de compartilhar algumas observações que podem agregar valor ao negócio.\n\nPosso enviar?",
-  },
-  {
-    id: "meta-empresas", name: "1º contato — Empresas (Genérico)", segmento: "Todos", primeiro: true,
+    id: "meta-empresas", name: "1º contato — Empresas (Genérico / Outros)", segmento: "Outros", primeiro: true,
     metaName: "empresas_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
     body: "Olá, {{contato}}.\n\nTudo bem?\n\nTrabalho com projetos focados em geração de oportunidades comerciais, posicionamento digital e melhoria de processos de vendas.\n\nNos últimos meses, identificamos alguns padrões que aparecem com frequência em empresas que buscam crescer de forma mais previsível.\n\nGostaria de compartilhar algumas observações que podem ser úteis para a operação de vocês.\n\nPosso enviar?",
   },
   {
-    id: "meta-saude", name: "1º contato — Saúde", segmento: "Todos", primeiro: false,
+    id: "meta-medicos", name: "1º contato — Médicos / Consultórios", segmento: "Todos", primeiro: true,
+    metaName: "medicos_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
+    body: "Olá, Dr(a). {{contato}}. Tudo bem? Trabalho ajudando médicos e consultórios a preencherem melhor a agenda e reduzirem faltas de pacientes, organizando a captação de novos pacientes e a confirmação de consultas de forma simples e sem sobrecarregar a recepção. Levantei algumas observações que costumam fazer diferença na rotina do consultório. Posso compartilhar com você?",
+  },
+  {
+    id: "meta-saude", name: "1º contato — Saúde (Genérico)", segmento: "Todos", primeiro: false,
     metaName: "saude_contato_inicial", metaLang: "pt_BR", vars: ["contato"],
     body: "Olá, {{contato}}.\n\nTudo bem?\n\nTrabalho com projetos focados em geração de demanda, posicionamento digital e estruturação comercial para empresas da área da saúde.\n\nAo longo dos últimos meses, identificamos alguns padrões e oportunidades que aparecem com frequência em clínicas e consultórios da região.\n\nGostaria de compartilhar algumas observações que podem ser relevantes para a sua operação.\n\nPosso enviar?",
   },
@@ -77,16 +91,26 @@ const WA = {
   // "Conectado" = envio real ativado pelo admin (a função já foi publicada e os
   // segredos da Meta estão no servidor). O token NUNCA fica no navegador.
   isConnected() { const c = WA.getCfg(); return !!c.live; },
+  // migra uma lista de modelos para a versão atual: troca os modelos PADRÃO
+  // (antigos ou atuais) pelos do código e PRESERVA os personalizados do usuário.
+  // Roda também quando algum modelo padrão novo está faltando (config compartilhada antiga).
+  migrateTemplates(saved, ver) {
+    if (!Array.isArray(saved) || !saved.length) return WA_DEFAULT_TEMPLATES.slice();
+    const defIds = WA_DEFAULT_TEMPLATES.map((t) => t.id);
+    const hasAllDefaults = defIds.every((id) => saved.some((t) => t.id === id));
+    if (Number(ver) >= WA_TPL_VERSION && hasAllDefaults) return saved;
+    const customs = saved.filter((t) => WA_OLD_DEFAULT_IDS.indexOf(t.id) < 0 && defIds.indexOf(t.id) < 0);
+    return WA_DEFAULT_TEMPLATES.concat(customs);
+  },
   getTemplates() {
     try {
       const saved = JSON.parse(localStorage.getItem(WA_LS.tpl) || "null");
       if (!Array.isArray(saved) || !saved.length) return WA_DEFAULT_TEMPLATES;
       const ver = Number(localStorage.getItem("nexus_wa_tpl_ver") || "0");
-      if (ver < WA_TPL_VERSION) {
-        // migra: remove os modelos padrão antigos, mantém os personalizados do usuário
-        const defIds = WA_DEFAULT_TEMPLATES.map((t) => t.id);
-        const customs = saved.filter((t) => WA_OLD_DEFAULT_IDS.indexOf(t.id) < 0 && defIds.indexOf(t.id) < 0);
-        const merged = WA_DEFAULT_TEMPLATES.concat(customs);
+      const defIds = WA_DEFAULT_TEMPLATES.map((t) => t.id);
+      const hasAllDefaults = defIds.every((id) => saved.some((t) => t.id === id));
+      if (ver < WA_TPL_VERSION || !hasAllDefaults) {
+        const merged = WA.migrateTemplates(saved, ver);
         localStorage.setItem(WA_LS.tpl, JSON.stringify(merged));
         localStorage.setItem("nexus_wa_tpl_ver", String(WA_TPL_VERSION));
         return merged;
@@ -197,8 +221,11 @@ const WA = {
     }
     if (s.auto) WA.setAuto(s.auto);
     if (Array.isArray(s.templates) && s.templates.length) {
-      localStorage.setItem(WA_LS.tpl, JSON.stringify(s.templates));
-      localStorage.setItem("nexus_wa_tpl_ver", String(s.tplVer || WA_TPL_VERSION));
+      // aplica a migração também na config compartilhada: garante que os modelos
+      // novos (veículos, delivery, médicos…) apareçam mesmo vindos de uma config antiga.
+      const merged = WA.migrateTemplates(s.templates, s.tplVer || 0);
+      localStorage.setItem(WA_LS.tpl, JSON.stringify(merged));
+      localStorage.setItem("nexus_wa_tpl_ver", String(WA_TPL_VERSION));
     }
   },
 
@@ -208,6 +235,15 @@ const WA = {
     return list.find((t) => t.primeiro && t.segmento === lead.segmento)
         || list.find((t) => t.primeiro && t.segmento === "Todos")
         || list[0];
+  },
+
+  // 1º contato SEMPRE com template APROVADO pela Meta (metaName presente).
+  // Usado pela automação de importação/criação — texto livre é recusado no 1º contato.
+  approvedForLead(lead, templates) {
+    const list = templates || WA.getTemplates();
+    return list.find((t) => t.primeiro && t.metaName && t.segmento === lead.segmento)
+        || list.find((t) => t.primeiro && t.metaName && t.segmento === "Todos")
+        || list.find((t) => t.metaName) || null;
   },
 
   // Resolve o "slug" da função a partir do que o admin salvou. Aceita o nome
@@ -237,16 +273,20 @@ const WA = {
   async send(lead, text, meta) {
     const cfg = WA.getCfg();
     const to = WA.normalizePhone(lead.whatsapp);
-    if (cfg.live && window.SB && SB.isConfigured() && to) {
+    const validPhone = !!to && to.length >= 12 && to.length <= 13;
+    if (cfg.live && window.SB && SB.isConfigured()) {
+      if (!validPhone) return { ok: false, simulated: false, error: "Número de WhatsApp inválido — use DDD + número (ex.: 34 99999-8888)" };
       try {
         const client = await SB.ensureClient();
+        const headers = await WA.authHeaders();
+        if (!headers) return { ok: false, simulated: false, error: "Sessão expirada — saia e entre novamente." };
         const payload = { to, text, leadId: lead.id };
         if (meta && meta.metaName) {
           payload.template = { name: meta.metaName, language: meta.metaLang || "pt_BR" };
           if (meta.components && meta.components.length) payload.template.components = meta.components;
         }
-        const { data, error } = await client.functions.invoke(WA.fnName(), { body: payload });
-        if (error) throw error;
+        const { data, error } = await client.functions.invoke(WA.fnName(), { body: payload, headers });
+        if (error) throw new Error(await WA.readFnError(error));
         if (data && data.error) throw new Error(data.error);
         return { ok: true, simulated: false, data };
       } catch (e) {
@@ -258,15 +298,68 @@ const WA = {
     return { ok: true, simulated: true, noPhone: !to };
   },
 
-  async sendTest(numero) {
+  // pega um token de sessão FRESCO (renova se expirado) e monta o header
+  async authHeaders() {
+    try {
+      const client = await SB.ensureClient();
+      if (!client) return null;
+      let session = null;
+      try { const { data } = await client.auth.getSession(); session = data && data.session; } catch (_) {}
+      // renova se faltar sessão ou se o token expira em menos de 2 min
+      const exp = session && session.expires_at ? session.expires_at * 1000 : 0;
+      if (!session || (exp && exp - Date.now() < 120000)) {
+        try {
+          const r = await client.auth.refreshSession();
+          if (r && r.data && r.data.session) session = r.data.session;
+        } catch (_) {}
+      }
+      const token = session && session.access_token;
+      return token ? { Authorization: "Bearer " + token } : null;
+    } catch (_) { return null; }
+  },
+
+  // extrai a mensagem real de erro retornada pela Edge Function (status não-2xx)
+  async readFnError(error) {
+    try {
+      if (error && error.context && typeof error.context.json === "function") {
+        const b = await error.context.json();
+        if (b && b.error) return b.error;
+        if (b && b.message) return b.message;
+      }
+    } catch (_) {}
+    try {
+      if (error && error.context && typeof error.context.text === "function") {
+        const t = await error.context.text();
+        if (t) return t.slice(0, 200);
+      }
+    } catch (_) {}
+    return (error && error.message) ? error.message : String(error);
+  },
+
+  async sendTest(numero, tpl) {
     const cfg = WA.getCfg();
     if (!cfg.live || !window.SB || !SB.isConfigured()) return { ok: false, error: "Envio real não está ativo." };
     try {
       const client = await SB.ensureClient();
-      const { data, error } = await client.functions.invoke(WA.fnName(), {
-        body: { to: WA.normalizePhone(numero), text: "✅ Teste de conexão do NexusCRM. Se você recebeu, o WhatsApp está ativo!" },
-      });
-      if (error) throw error;
+      const headers = await WA.authHeaders();
+      if (!headers) return { ok: false, error: "Sessão expirada — saia e entre novamente." };
+      // lead sintético para preencher as variáveis do template no teste
+      const sample = { empresa: "sua empresa", responsavel: "Victor", cidade: "Uberlândia", segmento: "Todos", cargo: "", dono: "CM", whatsapp: numero };
+      let body;
+      if (tpl && tpl.metaName) {
+        const meta = WA.buildMeta(tpl, sample);
+        body = { to: WA.normalizePhone(numero), text: WA.render(tpl.body, sample) };
+        if (meta) {
+          body.template = { name: meta.metaName, language: meta.metaLang || "pt_BR" };
+          if (meta.components && meta.components.length) body.template.components = meta.components;
+        }
+      } else if (tpl) {
+        body = { to: WA.normalizePhone(numero), text: WA.render(tpl.body, sample) };
+      } else {
+        body = { to: WA.normalizePhone(numero), text: "✅ Teste de conexão do NexusCRM. Se você recebeu, o WhatsApp está ativo!" };
+      }
+      const { data, error } = await client.functions.invoke(WA.fnName(), { body, headers });
+      if (error) throw new Error(await WA.readFnError(error));
       if (data && data.error) throw new Error(data.error);
       return { ok: true, data };
     } catch (e) {
@@ -279,13 +372,26 @@ const WA = {
 function WhatsAppSendModal({ open, leads, templates, onClose, onSend }) {
   const list = WA.getTemplates();
   const tpls = templates && templates.length ? templates : list;
-  const [tplId, setTplId] = wState(tpls[0] ? tpls[0].id : "");
-  const [body, setBody] = wState(tpls[0] ? tpls[0].body : "");
+  // escolhe o melhor modelo inicial: se for 1 lead, o template aprovado do segmento dele;
+  // se forem vários do mesmo segmento, idem; senão, o primeiro da lista.
+  const initialTpl = () => {
+    if (leads && leads.length) {
+      const segs = Array.from(new Set(leads.map((l) => l.segmento)));
+      if (segs.length === 1) {
+        const bySeg = WA.approvedForLead(leads[0], tpls) || WA.templateForLead(leads[0], tpls);
+        if (bySeg) return bySeg;
+      }
+    }
+    return tpls[0] || null;
+  };
+  const first0 = initialTpl();
+  const [tplId, setTplId] = wState(first0 ? first0.id : "");
+  const [body, setBody] = wState(first0 ? first0.body : "");
   const [sending, setSending] = wState(false);
 
   wEffect(() => {
     if (open) {
-      const first = tpls[0];
+      const first = initialTpl();
       setTplId(first ? first.id : "");
       setBody(first ? first.body : "");
     }
@@ -408,6 +514,7 @@ function WhatsAppSettings({ onChanged }) {
   const [templates, setTemplates] = wState(WA.getTemplates());
   const [editing, setEditing] = wState(null); // template being edited
   const [testNum, setTestNum] = wState("");
+  const [testTplId, setTestTplId] = wState("");
   const [testing, setTesting] = wState(false);
   const [testMsg, setTestMsg] = wState(null);
   const connected = !!cfg.live;
@@ -421,7 +528,8 @@ function WhatsAppSettings({ onChanged }) {
 
   const runTest = async () => {
     setTestMsg(null); setTesting(true);
-    const r = await WA.sendTest(testNum.trim());
+    const tpl = testTplId ? templates.find((t) => t.id === testTplId) : null;
+    const r = await WA.sendTest(testNum.trim(), tpl);
     setTesting(false);
     setTestMsg(r.ok ? { ok: true, msg: "Enviado! Verifique o WhatsApp do número." } : { ok: false, msg: r.error || "Falha no envio." });
   };
@@ -468,6 +576,20 @@ function WhatsAppSettings({ onChanged }) {
 
         <div className="wa-test">
           <span className="field-label">Enviar mensagem de teste</span>
+          <div className="wa-test-tpl">
+            <div className="select-wrap">
+              <select className="select" value={testTplId} onChange={(e) => { setTestTplId(e.target.value); setTestMsg(null); }}>
+                <option value="">Mensagem de teste padrão</option>
+                {templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.metaName ? " ✓" : " (texto livre)"}</option>)}
+              </select>
+              <Icon name="chevron-down" size={15} className="select-chevron" />
+            </div>
+            <span className="field-hint">{testTplId
+              ? (templates.find((t) => t.id === testTplId) && templates.find((t) => t.id === testTplId).metaName
+                  ? "Envia o template aprovado pela Meta (variáveis preenchidas com dados de exemplo)."
+                  : "Texto livre — só chega se o número já te respondeu nas últimas 24h.")
+              : "Mensagem fixa de verificação de conexão."}</span>
+          </div>
           <div className="wa-test-row">
             <input className="input mono" value={testNum} placeholder="5534999998888 (com DDI 55 + DDD)"
               onChange={(e) => { setTestNum(e.target.value); setTestMsg(null); }} />
@@ -574,9 +696,13 @@ function WhatsAppTemplateModal({ tpl, open, onClose, onSave }) {
   if (!open) return null;
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const valid = (form.name || "").trim() && (form.body || "").trim();
+  const isMeta = !!(form.metaName || "").trim();
+  const varList = (form.vars && form.vars.length)
+    ? (Array.isArray(form.vars) ? form.vars.join(", ") : form.vars)
+    : "";
 
   return (
-    <Modal open={open} onClose={onClose} title={form._new ? "Novo modelo" : "Editar modelo"} width={540}>
+    <Modal open={open} onClose={onClose} title={form._new ? "Novo modelo" : "Editar modelo"} width={560}>
       <div className="form-grid">
         <div className="field-row">
           <label className="field">
@@ -604,6 +730,44 @@ function WhatsAppTemplateModal({ tpl, open, onClose, onSave }) {
           <Toggle on={!!form.primeiro} onChange={(v) => set("primeiro", v)} />
           <span>Usar como modelo de <strong>1º contato</strong> (entra na automação e disparo por segmento)</span>
         </label>
+
+        <div className="wa-meta-box">
+          <div className="wa-meta-head">
+            <span className="settings-icon" style={{ background: COLORS.green + "1A", color: COLORS.green }}><Icon name="check" size={16} /></span>
+            <div className="settings-text">
+              <div className="settings-title">Template aprovado pela Meta</div>
+              <div className="settings-desc">Preencha para liberar este modelo no <strong>1º contato frio</strong>. Deixe em branco para texto livre (só dentro da janela de 24h).</div>
+            </div>
+          </div>
+          <div className="field-row">
+            <label className="field">
+              <span className="field-label">Nome do template na Meta</span>
+              <input className="input mono" value={form.metaName || ""} placeholder="ex: veiculos_contato_inicial"
+                onChange={(e) => set("metaName", e.target.value.trim())} />
+            </label>
+            <label className="field" style={{ maxWidth: 150 }}>
+              <span className="field-label">Idioma</span>
+              <div className="select-wrap">
+                <select className="select" value={form.metaLang || "pt_BR"} onChange={(e) => set("metaLang", e.target.value)}>
+                  <option value="pt_BR">Português (BR)</option>
+                  <option value="pt_PT">Português (PT)</option>
+                  <option value="en_US">Inglês (US)</option>
+                  <option value="en">Inglês</option>
+                  <option value="es">Espanhol</option>
+                </select>
+                <Icon name="chevron-down" size={15} className="select-chevron" />
+              </div>
+            </label>
+          </div>
+          {isMeta && (
+            <label className="field">
+              <span className="field-label">Variáveis na ordem ({"{{1}}, {{2}}, {{3}}"}) <span className="wa-vars">separadas por vírgula</span></span>
+              <input className="input mono" value={varList} placeholder="ex: contato   ou   responsavel, cidade, empresa"
+                onChange={(e) => set("vars", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))} />
+              <span className="field-hint">Campos do lead que preenchem cada variável do template, na ordem. Disponíveis: contato, empresa, cidade, cargo, segmento, responsavel.</span>
+            </label>
+          )}
+        </div>
       </div>
       <div className="modal-foot">
         <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>

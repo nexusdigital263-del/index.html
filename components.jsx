@@ -73,6 +73,7 @@ function Select({ value, onChange, options, label }) {
 const NAV = [
   { key: "dashboard", label: "Dashboard",     icon: "layout-dashboard" },
   { key: "leads",     label: "Leads",         icon: "users" },
+  { key: "inbox",     label: "Conversas",     icon: "message-circle" },
   { key: "kanban",    label: "Kanban",        icon: "kanban" },
   { key: "agenda",    label: "Agenda",        icon: "calendar" },
   { key: "reports",   label: "Relatórios",    icon: "bar-chart" },
@@ -80,9 +81,10 @@ const NAV = [
   { key: "settings",  label: "Configurações", icon: "settings" },
 ];
 
-function Sidebar({ active, onNavigate, collapsed, onLogout, user }) {
+function Sidebar({ active, onNavigate, collapsed, onLogout, user, badges }) {
   const role = user ? user.role : "Admin";
   const nav = NAV.filter((item) => can(role, item.key));
+  const b = badges || {};
   return (
     <aside className={"sidebar" + (collapsed ? " sidebar-collapsed" : "")}>
       <div className="sidebar-brand">
@@ -97,6 +99,7 @@ function Sidebar({ active, onNavigate, collapsed, onLogout, user }) {
             onClick={() => onNavigate(item.key)} title={item.label}>
             <Icon name={item.icon} size={19} />
             {!collapsed && <span>{item.label}</span>}
+            {b[item.key] > 0 && <span className={"nav-badge" + (collapsed ? " nav-badge-dot" : "")}>{collapsed ? "" : b[item.key]}</span>}
             {active === item.key && <span className="nav-indicator"></span>}
           </button>
         ))}
