@@ -5,6 +5,16 @@
 // ============================================================
 const { useState: iState, useMemo: iMemo, useEffect: iEffect, useRef: iRef } = React;
 
+// hora (HH:MM) a partir do timestamp real da mensagem; volta "" se não houver
+function msgTime(m) {
+  let t = m.ts ? Number(m.ts) : null;
+  if (t == null) { const mm = /^in-(\d{10,})/.exec(m.id || ""); if (mm) t = Number(mm[1]); }
+  if (t == null) return "";
+  const d = new Date(t);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
 // status de entrega de uma mensagem enviada (✓ enviado, ✓✓ entregue, ✓✓ lido azul, ⚠ falhou)
 function MsgStatus({ status }) {
   if (status === "failed") return <span className="msg-status failed" title="Falha no envio"> ⚠</span>;
@@ -27,12 +37,27 @@ function quickLabel(q) {
   return w.length < q.length ? w + "…" : w;
 }
 
-// mensagens de WhatsApp de um lead (enviadas + recebidas), em ordem cronológica
+// mensagens de WhatsApp de um lead (enviadas + recebidas), em ordem cronológica.
+// Ordena por timestamp real (ts). Mensagens antigas sem ts mantêm a ordem de
+// inserção do array (que já é cronológica) — NÃO usa a data, que pode ser fixa.
+function inResolveTs(it) {
+  if (it.ts) return Number(it.ts);
+  const m = /^in-(\d{10,})/.exec(it.id || "");
+  if (m) return Number(m[1]); // recebidas antigas têm o tempo embutido no id
+  return null;
+}
 function waThread(lead) {
-  return (lead.interacoes || [])
-    .filter((it) => it.dir === "in" || it.tipo === "WhatsApp")
-    .slice()
-    .sort((a, b) => (a.data || "").localeCompare(b.data || ""));
+  const arr = (lead.interacoes || []).filter((it) => it.dir === "in" || it.tipo === "WhatsApp");
+  let last = 0;
+  const tagged = arr.map((it, i) => {
+    let t = inResolveTs(it);
+    if (t == null) { t = last + 1; } // sem tempo: logo após a anterior (preserva ordem do array)
+    else if (t < last) { t = last + 1; } // mantém monotônico se vier fora de ordem
+    last = t;
+    return { it, i, t };
+  });
+  tagged.sort((a, b) => a.t - b.t || a.i - b.i);
+  return tagged.map((x) => x.it);
 }
 function lastThreadDate(msgs) {
   return msgs.length ? msgs[msgs.length - 1].data || "" : "";
@@ -215,7 +240,7 @@ function InboxScreen({ leads, onReply, onMarkRead, onClearConversation, onSetOpt
                     <div className="chat-bubble">
                       <div className="chat-text">{m.nota}</div>
                       <div className="chat-time mono">
-                        {fmtDate(m.data)}
+                        {fmtDate(m.data)}{msgTime(m) ? " · " + msgTime(m) : ""}
                         {!inbound && <MsgStatus status={m.status} />}
                       </div>
                     </div>

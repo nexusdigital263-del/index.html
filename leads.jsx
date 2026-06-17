@@ -304,7 +304,12 @@ function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDele
     setReply("");
   };
 
-  const sorted = [...lead.interacoes].filter((it) => it.kind !== "optout").sort((a, b) => (a.data || "").localeCompare(b.data || ""));
+  // ordena por timestamp real; mensagens antigas sem ts mantêm a ordem do array
+  const _ts = (it) => { if (it.ts) return Number(it.ts); const m = /^in-(\d{10,})/.exec(it.id || ""); return m ? Number(m[1]) : null; };
+  const _filt = [...lead.interacoes].filter((it) => it.kind !== "optout");
+  let _last = 0;
+  const sorted = _filt.map((it, i) => { let t = _ts(it); if (t == null || t < _last) t = _last + 1; _last = t; return { it, i, t }; })
+    .sort((a, b) => a.t - b.t || a.i - b.i).map((x) => x.it);
   const waNum = (lead.whatsapp || "").replace(/\D/g, "");
   const optedOut = leadOptedOut(lead);
 
@@ -371,7 +376,7 @@ function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDele
                     <span className="tl-type" style={{ color: meta.color }}>
                       {inbound ? "Resposta recebida" : it.tipo}
                     </span>
-                    <span className="tl-date mono">{fmtDate(it.data)}</span>
+                    <span className="tl-date mono">{fmtDate(it.data)}{(function(){ let t = it.ts ? Number(it.ts) : null; if (t==null){ const mm=/^in-(\d{10,})/.exec(it.id||""); if(mm) t=Number(mm[1]); } if(t==null) return ""; const d=new Date(t); return isNaN(d.getTime())?"":" · "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); })()}</span>
                   </div>
                   <p className={"tl-note" + (inbound ? " tl-note-in" : "")}>{it.nota}</p>
                 </div>

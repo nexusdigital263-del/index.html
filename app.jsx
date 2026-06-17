@@ -146,6 +146,8 @@ function LeadFormModal({ lead, open, mode, onClose, onSave, owners, lockOwner })
 const REMOTE = SB.isConfigured();
 const TODAY = SB.TODAY || "2026-06-07";
 const uid = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now() + "-" + Math.random().toString(16).slice(2));
+// data real de hoje (YYYY-MM-DD) — TODAY é fixo para o seed demo; mensagens reais usam a data atual
+const nowDate = () => new Date().toISOString().slice(0, 10);
 
 // traduz erros comuns da WhatsApp Cloud API para mensagens claras
 function traduzWaErro(msg) {
@@ -293,6 +295,9 @@ function App() {
   useEffect(() => {
     if (!REMOTE || !currentId) return;
     let alive = true;
+    let timer = null;
+    let fast = 0; // ciclos rápidos restantes após uma resposta
+    const SLOW = 10000, FAST = 4000;
     const poll = async () => {
       if (document.hidden) return;
       try {
@@ -312,7 +317,7 @@ function App() {
             // opt-out automático por palavra-chave na última resposta
             const lastIn = (l.interacoes || []).slice().reverse().find((it) => it.dir === "in");
             if (lastIn && WA.isOptOut(lastIn.nota) && !leadOptedOut(l)) {
-              l.interacoes = [...(l.interacoes || []), { id: uid(), data: TODAY, tipo: "Sistema", kind: "optout", nota: "Opt-out automático — o cliente pediu para parar." }];
+              l.interacoes = [...(l.interacoes || []), { id: uid(), data: nowDate(), ts: Date.now(), tipo: "Sistema", kind: "optout", nota: "Opt-out automático — o cliente pediu para parar." }];
               if (REMOTE) sync(() => SB.patchLead(l.id, { interacoes: l.interacoes }));
             }
           }
@@ -320,24 +325,34 @@ function App() {
         setLeads(fresh);
         setQueueInfo({ len: WA.getQueue().length, nextAt: WA.nextAt() });
         if (novas > 0) {
+          // chegou resposta → entra em modo rápido por ~30s para pegar mensagens em sequência
+          fast = 8;
           toast(novas === 1 ? `💬 ${quem} respondeu no WhatsApp` : `💬 ${novas} novas respostas no WhatsApp`, "success");
         }
       } catch (e) { /* silencioso */ }
     };
-    const t = setInterval(poll, 40000);
+    // agenda adaptativa: rápido (4s) logo após uma resposta, normal (10s) em repouso
+    const loop = async () => {
+      if (!alive) return;
+      await poll();
+      if (!alive) return;
+      const delay = fast > 0 ? (fast--, FAST) : SLOW;
+      timer = setTimeout(loop, delay);
+    };
+    timer = setTimeout(loop, SLOW);
     const onVis = () => { if (!document.hidden) poll(); };
     document.addEventListener("visibilitychange", onVis);
-    return () => { alive = false; clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
+    return () => { alive = false; if (timer) clearTimeout(timer); document.removeEventListener("visibilitychange", onVis); };
   }, [currentId]);
 
   const addInteraction = useCallback((id, { tipo, nota }) => {
     const cur = leadsRef.current.find((l) => l.id === id);
     if (!cur) return;
-    const it = { id: uid(), data: TODAY, tipo, nota };
-    const updated = { ...cur, interacoes: [...cur.interacoes, it], ultimoContato: TODAY };
+    const it = { id: uid(), data: nowDate(), ts: Date.now(), tipo, nota };
+    const updated = { ...cur, interacoes: [...cur.interacoes, it], ultimoContato: nowDate() };
     setLeads((prev) => prev.map((l) => l.id === id ? updated : l));
     toast("Interação registrada", "success");
-    if (REMOTE) sync(() => SB.patchLead(id, { interacoes: updated.interacoes, ultimoContato: TODAY }));
+    if (REMOTE) sync(() => SB.patchLead(id, { interacoes: updated.interacoes, ultimoContato: nowDate() }));
   }, [sync]);
 
   // remove o histórico de conversa (mensagens de WhatsApp + respostas recebidas)
@@ -413,10 +428,10 @@ function App() {
       }
     }).catch(() => {});
     if (real) WA.incDaily(1); // conta envio real para o limite diário
-    const it = { id: itId, data: TODAY, tipo: "WhatsApp", dir: "out", nota: rendered, status: "sent", tpl: (metaInfo && metaInfo.metaName) ? metaInfo.metaName : null };
+    const it = { id: itId, data: nowDate(), ts: Date.now(), tipo: "WhatsApp", dir: "out", nota: rendered, status: "sent", tpl: (metaInfo && metaInfo.metaName) ? metaInfo.metaName : null };
     const interacoes = [...lead.interacoes, it];
-    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, interacoes, ultimoContato: TODAY } : l));
-    if (REMOTE) sync(() => SB.patchLead(Number(id), { interacoes, ultimoContato: TODAY }));
+    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, interacoes, ultimoContato: nowDate() } : l));
+    if (REMOTE) sync(() => SB.patchLead(Number(id), { interacoes, ultimoContato: nowDate() }));
     return true;
   }, [sync, patchInteraction]);
 
