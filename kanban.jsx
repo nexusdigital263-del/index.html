@@ -1,102 +1,58 @@
-// ============================================================
-//  Kanban screen — draggable cards (HTML5 DnD via React state)
-// ============================================================
-const KANBAN_COLS = [
-  { status: "Novo",             label: "Prospecção",       icon: "circle-dollar" },
-  { status: "Em Contato",       label: "Contato Feito",    icon: "phone" },
-  { status: "Reunião Agendada", label: "Reunião Agendada", icon: "calendar" },
-  { status: "Proposta Enviada", label: "Proposta Enviada", icon: "mail" },
-  { status: "Fechado",          label: "Fechado",          icon: "check" },
-  { status: "Perdido",          label: "Perdido",          icon: "x" },
-];
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VitalHub — Prospecção</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Serif+Display&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script>
+    // aplica o tema salvo antes da 1ª pintura (evita flash)
+    (function(){ try { document.documentElement.setAttribute('data-theme', localStorage.getItem('vitalhub_theme') || 'dark'); } catch(e){ document.documentElement.setAttribute('data-theme','dark'); } })();
+  </script>
 
-function KanbanCard({ lead, onOpenLead, onDragStart, onDragEnd, dragging }) {
-  return (
-    <div
-      className={"kanban-card" + (dragging ? " dragging" : "")}
-      draggable
-      onDragStart={(e) => onDragStart(e, lead.id)}
-      onDragEnd={onDragEnd}
-      onClick={() => onOpenLead(lead.id)}
-    >
-      <div className="kc-top">
-        <span className="kc-empresa">{lead.empresa}</span>
-        <PriorityBadge priority={lead.prioridade} />
-      </div>
-      <span className="seg-tag kc-seg" style={{ "--seg": SEGMENT_COLORS[lead.segmento] }}>
-        <span className="seg-dot" style={{ background: SEGMENT_COLORS[lead.segmento] }}></span>
-        {lead.segmento}
-      </span>
-      <div className="kc-valor mono">{fmtBRL(lead.valor)}<small>/mês</small></div>
-      <div className="kc-foot">
-        <span className="kc-days"><Icon name="clock" size={13} /> {lead.diasNoFunil}d no funil</span>
-        <Avatar initials={lead.dono} size={24} />
-      </div>
-    </div>
-  );
-}
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  <script src="https://unpkg.com/react-is@18.3.1/umd/react-is.production.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="root"></div>
 
-function Kanban({ leads, onOpenLead, onMoveLead }) {
-  const [draggingId, setDraggingId] = useState(null);
-  const [overCol, setOverCol] = useState(null);
+  <script>
+    // Recharts 2.x internals still use defaultProps on function components, which
+    // React 18 dev-mode flags as a deprecation. Harmless & out of our control —
+    // filter just that message so real errors stay visible.
+    (function () {
+      const orig = console.error;
+      console.error = function (...args) {
+        const msg = typeof args[0] === "string" ? args[0] : "";
+        if (msg.indexOf("Support for defaultProps will be removed") !== -1) return;
+        orig.apply(console, args);
+      };
+    })();
+  </script>
 
-  const onDragStart = (e, id) => {
-    setDraggingId(id);
-    e.dataTransfer.effectAllowed = "move";
-    try { e.dataTransfer.setData("text/plain", String(id)); } catch (err) {}
-  };
-  const onDragEnd = () => { setDraggingId(null); setOverCol(null); };
-
-  const onDrop = (status) => {
-    if (draggingId != null) onMoveLead(draggingId, status);
-    setDraggingId(null);
-    setOverCol(null);
-  };
-
-  const byStatus = useMemo(() => {
-    const map = {};
-    KANBAN_COLS.forEach((c) => { map[c.status] = leads.filter((l) => l.status === c.status); });
-    return map;
-  }, [leads]);
-
-  return (
-    <div className="screen-pad kanban-screen fade-in">
-      <div className="kanban-board">
-        {KANBAN_COLS.map((col) => {
-          const items = byStatus[col.status];
-          const total = items.reduce((s, l) => s + l.valor, 0);
-          const meta = STATUS_META[col.status];
-          return (
-            <div
-              key={col.status}
-              className={"kanban-col" + (overCol === col.status ? " col-over" : "")}
-              onDragOver={(e) => { e.preventDefault(); setOverCol(col.status); }}
-              onDragLeave={(e) => { if (e.currentTarget === e.target) setOverCol(null); }}
-              onDrop={() => onDrop(col.status)}
-            >
-              <div className="kanban-col-head">
-                <div className="kch-left">
-                  <span className="kch-dot" style={{ background: meta.color }}></span>
-                  <span className="kch-label">{col.label}</span>
-                  <span className="kch-count">{items.length}</span>
-                </div>
-                <span className="kch-total mono">{fmtBRLk(total)}</span>
-              </div>
-              <div className="kanban-col-body">
-                {items.map((lead) => (
-                  <KanbanCard key={lead.id} lead={lead} onOpenLead={onOpenLead}
-                    onDragStart={onDragStart} onDragEnd={onDragEnd} dragging={draggingId === lead.id} />
-                ))}
-                {overCol === col.status && draggingId != null && (
-                  <div className="kanban-drop-hint">Soltar aqui</div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-Object.assign(window, { Kanban });
+  <script type="text/babel" src="supabase.jsx"></script>
+  <script type="text/babel" src="data.jsx"></script>
+  <script type="text/babel" src="icons.jsx"></script>
+  <script type="text/babel" src="components.jsx"></script>
+  <script type="text/babel" src="toast.jsx"></script>
+  <script type="text/babel" src="users.jsx"></script>
+  <script type="text/babel" src="dashboard.jsx"></script>
+  <script type="text/babel" src="leads.jsx"></script>
+  <script type="text/babel" src="inbox.jsx"></script>
+  <script type="text/babel" src="kanban.jsx"></script>
+  <script type="text/babel" src="agenda.jsx"></script>
+  <script type="text/babel" src="reports.jsx"></script>
+  <script type="text/babel" src="whatsapp.jsx"></script>
+  <script type="text/babel" src="import.jsx"></script>
+  <script type="text/babel" src="settings.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

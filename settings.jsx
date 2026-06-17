@@ -1,189 +1,230 @@
 // ============================================================
-//  Settings screen — appearance, data, Supabase connection
+//  Reports screen — pie / line / bar charts + summary table
 // ============================================================
-const { useState: sState } = React;
-
-function Settings({ accent, onAccent, onReset, onLogout, user, remote, onConnect, onDisconnect, onWaChanged, theme, onSetTheme }) {
-  const accents = [COLORS.forest, "#2F6B43", COLORS.blue, COLORS.purple, COLORS.amber];
-  const ACCENT_NAMES = {
-    [COLORS.forest]: "Verde VitalHub", "#2F6B43": "Verde floresta", [COLORS.blue]: "Azul elétrico",
-    [COLORS.purple]: "Roxo", [COLORS.amber]: "Âmbar",
-  };
-  const me = user || { id: "CM", name: "—", email: "", role: "Admin" };
-  const isAdmin = me.role === "Admin";
-
+function SegmentPie({ data }) {
+  const { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } = Recharts;
+  const total = data.reduce((s, d) => s + d.value, 0);
   return (
-    <div className="screen-pad fade-in settings-screen">
-      <div className="settings-cols">
-        <div className="settings-main">
-          <Panel title="Perfil" subtitle="Usuário conectado">
-            <div className="profile-card">
-              <Avatar initials={me.id} size={64} />
-              <div className="profile-info">
-                <div className="profile-name">{me.name}</div>
-                <div className="profile-role-row">
-                  <RoleBadge role={me.role} />
-                  <span className="profile-mode">{remote ? "Supabase" : "Demonstração"}</span>
-                </div>
-                <div className="profile-meta mono">{me.email}</div>
-              </div>
-              <button className="btn btn-danger" onClick={onLogout}><Icon name="log-out" size={15} /> Sair</button>
-            </div>
-          </Panel>
-
-          {isAdmin && <SupabasePanel remote={remote} onConnect={onConnect} onDisconnect={onDisconnect} />}
-
-          {isAdmin && <WhatsAppSettings onChanged={onWaChanged} />}
-
-          <Panel title="Aparência" subtitle="Tema e cor de destaque">
-            <div className="theme-choice">
-              <button className={"theme-card" + (theme !== "light" ? " active" : "")} onClick={() => onSetTheme && onSetTheme("dark")}>
-                <span className="theme-prev theme-prev-dark"><span className="tp-bar"></span><span className="tp-dot"></span></span>
-                <span className="theme-card-label"><Icon name="moon" size={15} /> Escuro</span>
-              </button>
-              <button className={"theme-card" + (theme === "light" ? " active" : "")} onClick={() => onSetTheme && onSetTheme("light")}>
-                <span className="theme-prev theme-prev-light"><span className="tp-bar"></span><span className="tp-dot"></span></span>
-                <span className="theme-card-label"><Icon name="sun" size={15} /> Claro</span>
-              </button>
-            </div>
-            <div className="accent-label">Cor de destaque</div>
-            <div className="accent-row">
-              <div className="accent-picker">
-                {accents.map((c) => (
-                  <button key={c} className={"accent-swatch" + (accent === c ? " active" : "")}
-                    style={{ background: c }} onClick={() => onAccent(c)} title={ACCENT_NAMES[c]}>
-                    {accent === c && <Icon name="check" size={16} strokeWidth={3} />}
-                  </button>
-                ))}
-              </div>
-              <span className="accent-current">{ACCENT_NAMES[accent] || "Personalizada"}</span>
-            </div>
-            <p className="accent-note">A cor é aplicada em todo o app e salva neste navegador.</p>
-          </Panel>
-        </div>
-
-        <div className="settings-side">
-          {!remote && (
-            <Panel title="Dados" subtitle="Armazenamento local">
-              <div className="settings-text" style={{ marginBottom: 14 }}>
-                <div className="settings-desc">Em modo demonstração, leads e tarefas ficam salvos apenas neste navegador. Conecte o Supabase para compartilhar com a equipe.</div>
-              </div>
-              <button className="btn btn-ghost btn-block" onClick={() => {
-                if (window.confirm("Restaurar todos os dados ao padrão? Suas alterações locais serão perdidas.")) onReset();
-              }}><Icon name="shield" size={15} /> Restaurar dados padrão</button>
-            </Panel>
-          )}
-          {remote && (
-            <Panel title="Sincronização" subtitle="Dados na nuvem">
-              <div className="sync-status">
-                <span className="sync-dot"></span>
-                <div>
-                  <div className="sync-title">Conectado ao Supabase</div>
-                  <div className="settings-desc">Leads, tarefas e usuários são compartilhados em tempo real com toda a equipe.</div>
-                </div>
-              </div>
-            </Panel>
-          )}
-        </div>
+    <div className="pie-wrap">
+      <ResponsiveContainer width="100%" height={240}>
+        <PieChart>
+          <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%"
+            innerRadius={58} outerRadius={92} paddingAngle={2} stroke="none" isAnimationActive={false}>
+            {data.map((d, i) => <Cell key={i} fill={d.fill} />)}
+          </Pie>
+          <Tooltip content={<ChartTooltip unit=" leads" />} />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="pie-center">
+        <div className="pie-center-val mono">{total}</div>
+        <div className="pie-center-lbl">leads</div>
       </div>
     </div>
   );
 }
 
-// ---- Supabase connection panel (Admin only) --------------------------------
-function normalizeSbUrl(raw) {
-  let u = (raw || "").trim();
-  if (!u) return "";
-  // accept pastes like https://xxxx.supabase.co/rest/v1/  → keep scheme+host only
-  const m = u.match(/https?:\/\/[a-z0-9-]+\.supabase\.co/i);
-  if (m) return m[0].replace(/^http:/i, "https:");
-  return u.replace(/\/+$/, "");
-}
-
-function SupabasePanel({ remote, onConnect, onDisconnect }) {
-  const cfg = (window.SB && SB.getCfg()) || {};
-  const [url, setUrl] = sState(cfg.url || "");
-  const [key, setKey] = sState(cfg.anonKey || "");
-  const [testing, setTesting] = sState(false);
-  const [result, setResult] = sState(null); // {ok, msg}
-
-  const cleanUrl = normalizeSbUrl(url);
-  const urlLooksOk = /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(cleanUrl);
-  const keyOk = key.trim().length > 20;
-  const canTest = !!cleanUrl && !!key.trim() && !testing;
-  const canSave = urlLooksOk && keyOk;
-
-  const test = async () => {
-    setResult(null); setTesting(true);
-    try {
-      const r = await SB.testConnection({ url: cleanUrl, anonKey: key.trim() });
-      setResult(r);
-    } catch (e) {
-      setResult({ ok: false, msg: "Erro ao testar: " + (e && e.message ? e.message : e) });
-    }
-    setTesting(false);
-  };
-
-  if (remote) {
-    const builtin = window.SB && SB.isBuiltin && SB.isBuiltin();
-    return (
-      <Panel title="Supabase" subtitle="Banco de dados compartilhado" right={<span className="conn-badge on">Conectado</span>}>
-        <div className="settings-desc" style={{ marginBottom: 14 }}>
-          O CRM está usando seu projeto Supabase. Todos os usuários acessam os mesmos dados, com login e permissões reais.
-        </div>
-        <div className="sb-url mono">{cfg.url}</div>
-        {builtin ? (
-          <div className="field-hint" style={{ marginTop: 12 }}>
-            Conexão embutida no aplicativo — todos já entram conectados, sem precisar configurar.
-          </div>
-        ) : (
-          <button className="btn btn-ghost btn-block" style={{ marginTop: 14 }} onClick={() => {
-            if (window.confirm("Desconectar do Supabase e voltar ao modo demonstração? O app será recarregado.")) onDisconnect();
-          }}><Icon name="plug" size={15} /> Desconectar</button>
-        )}
-      </Panel>
-    );
-  }
-
+function SegmentLegend({ data }) {
+  const total = data.reduce((s, d) => s + d.value, 0);
   return (
-    <Panel title="Conectar Supabase" subtitle="Compartilhe o CRM com sua equipe">
-      <div className="sb-steps">
-        <div className="sb-step"><span className="sb-step-n">1</span> Crie um projeto grátis em <strong>supabase.com</strong></div>
-        <div className="sb-step"><span className="sb-step-n">2</span> Rode o script <strong>supabase-setup.sql</strong> no SQL Editor</div>
-        <div className="sb-step"><span className="sb-step-n">3</span> Cole abaixo a <strong>URL</strong> e a <strong>chave anon</strong> (Project Settings → API Keys)</div>
-      </div>
-      <div className="form-grid" style={{ marginTop: 16 }}>
-        <label className="field">
-          <span className="field-label">Project URL</span>
-          <input className="input mono" value={url} onChange={(e) => { setUrl(e.target.value); setResult(null); }}
-            placeholder="https://xxxxxxxx.supabase.co" />
-          {url.trim() && !urlLooksOk && (
-            <span className="field-hint err">Use o formato https://xxxx.supabase.co (sem /rest/v1)</span>
-          )}
-          {url.trim() && urlLooksOk && cleanUrl !== url.trim() && (
-            <span className="field-hint">Será usada: <strong>{cleanUrl}</strong></span>
-          )}
-        </label>
-        <label className="field">
-          <span className="field-label">Anon public key</span>
-          <input className="input mono" value={key} onChange={(e) => { setKey(e.target.value); setResult(null); }}
-            placeholder="eyJhbGciOi... ou sb_publishable_..." type="password" />
-        </label>
-        {result && (
-          <div className={"auth-msg " + (result.ok ? "ok" : "err")}>{result.msg}</div>
-        )}
-        <div className="sb-actions">
-          <button className="btn btn-ghost" disabled={!canTest} onClick={test}>
-            {testing ? "Testando…" : "Testar conexão"}
-          </button>
-          <button className="btn btn-primary" disabled={!canSave}
-            onClick={() => onConnect({ url: cleanUrl, anonKey: key.trim() })}>
-            <Icon name="check" size={15} /> Conectar e recarregar
-          </button>
+    <div className="pie-legend">
+      {data.map((d) => (
+        <div className="legend-row" key={d.name}>
+          <span className="legend-dot" style={{ background: d.fill }}></span>
+          <span className="legend-name">{d.name}</span>
+          <span className="legend-val mono">{d.value}</span>
+          <span className="legend-pct mono">{Math.round((d.value / total) * 100)}%</span>
         </div>
-      </div>
-    </Panel>
+      ))}
+    </div>
   );
 }
 
-Object.assign(window, { Settings });
+function EvolutionLine({ data }) {
+  const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } = Recharts;
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <LineChart data={data} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.16)" vertical={false} />
+        <XAxis dataKey="mes" tickLine={false} axisLine={false}
+          tick={{ fill: "#8B93A7", fontSize: 12, fontFamily: "'DM Sans', sans-serif" }} />
+        <YAxis tickLine={false} axisLine={false}
+          tick={{ fill: "#8B93A7", fontSize: 12, fontFamily: "'Space Mono', monospace" }} />
+        <Tooltip content={<ChartTooltip />} cursor={{ stroke: "rgba(128,128,128,0.28)" }} />
+        <Legend wrapperStyle={{ fontSize: 12.5, fontFamily: "'DM Sans', sans-serif", paddingTop: 8 }} iconType="circle" />
+        <Line type="monotone" dataKey="abertos" name="Abertos" stroke={COLORS.blue} strokeWidth={2.5}
+          dot={{ r: 3, fill: COLORS.blue, strokeWidth: 0 }} activeDot={{ r: 5 }} isAnimationActive={false} />
+        <Line type="monotone" dataKey="fechados" name="Fechados" stroke={COLORS.green} strokeWidth={2.5}
+          dot={{ r: 3, fill: COLORS.green, strokeWidth: 0 }} activeDot={{ r: 5 }} isAnimationActive={false} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+function CityBars({ data }) {
+  const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } = Recharts;
+  const palette = [COLORS.blue, COLORS.purple, COLORS.cyan, COLORS.amber];
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <BarChart data={data} margin={{ top: 16, right: 8, left: -16, bottom: 0 }} barCategoryGap="30%">
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.16)" vertical={false} />
+        <XAxis dataKey="cidade" tickLine={false} axisLine={false}
+          tick={{ fill: "#8B93A7", fontSize: 12, fontFamily: "'DM Sans', sans-serif" }} />
+        <YAxis tickLine={false} axisLine={false}
+          tick={{ fill: "#8B93A7", fontSize: 12, fontFamily: "'Space Mono', monospace" }} />
+        <Tooltip cursor={{ fill: "rgba(128,128,128,0.12)" }} content={<ChartTooltip unit=" leads" />} />
+        <Bar dataKey="leads" name="Leads" radius={[6, 6, 0, 0]} barSize={46} isAnimationActive={false}>
+          {data.map((d, i) => <Cell key={i} fill={palette[i % palette.length]} />)}
+          <LabelList dataKey="leads" position="top" fill="#3E8E5A"
+            style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, fontWeight: 700 }} />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function ProspTable({ rows, mono }) {
+  if (!rows || !rows.length) return <div className="prosp-empty-sm">Sem dados.</div>;
+  const maxTaxa = Math.max(100, ...rows.map((r) => r.taxa));
+  return (
+    <table className="data-table prosp-table">
+      <thead>
+        <tr>
+          <th>{mono ? "Template" : "Segmento"}</th>
+          <th className="num">Enviados</th>
+          <th className="num">Resp.</th>
+          <th>Taxa</th>
+          <th className="num">Tempo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.label}>
+            <td className={mono ? "mono prosp-lbl" : ""}>{r.label}</td>
+            <td className="num mono">{r.enviados}</td>
+            <td className="num mono">{r.respostas}</td>
+            <td>
+              <div className="prosp-bar-cell">
+                <div className="prosp-bar-track"><div className="prosp-bar-fill" style={{ width: (r.taxa / maxTaxa * 100) + "%", background: r.taxa >= 30 ? COLORS.green : r.taxa >= 15 ? COLORS.amber : COLORS.red }}></div></div>
+                <span className="prosp-bar-val mono">{r.taxa}%</span>
+              </div>
+            </td>
+            <td className="num mono">{r.tempo != null ? r.tempo + "d" : "—"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function Reports({ leads }) {
+  const seg = useMemo(() => segmentData(leads), [leads]);
+  const city = useMemo(() => cityData(leads), [leads]);
+  const summary = useMemo(() => segmentSummary(leads), [leads]);
+  const totals = useMemo(() => summary.reduce((a, s) => ({
+    leads: a.leads + s.leads, reunioes: a.reunioes + s.reunioes,
+    fechamentos: a.fechamentos + s.fechamentos, receita: a.receita + s.receita,
+  }), { leads: 0, reunioes: 0, fechamentos: 0, receita: 0 }), [summary]);
+
+  const prosp = useMemo(() => prospeccaoMetrics(leads), [leads]);
+
+  return (
+    <div className="screen-pad fade-in">
+      <Panel title="Desempenho da Prospecção" subtitle="Taxa de resposta do WhatsApp por segmento e por mensagem">
+        {prosp.total.enviados === 0 ? (
+          <div className="prosp-empty">Nenhuma mensagem de prospecção enviada ainda. Os indicadores aparecem aqui assim que você disparar o 1º contato.</div>
+        ) : (
+          <React.Fragment>
+            <div className="prosp-kpis">
+              <div className="prosp-kpi">
+                <div className="prosp-kpi-val mono">{prosp.total.enviados}</div>
+                <div className="prosp-kpi-lbl">Leads contatados</div>
+              </div>
+              <div className="prosp-kpi">
+                <div className="prosp-kpi-val mono">{prosp.total.respostas}</div>
+                <div className="prosp-kpi-lbl">Responderam</div>
+              </div>
+              <div className="prosp-kpi">
+                <div className="prosp-kpi-val mono" style={{ color: COLORS.green }}>{prosp.total.taxa}%</div>
+                <div className="prosp-kpi-lbl">Taxa de resposta</div>
+              </div>
+              <div className="prosp-kpi">
+                <div className="prosp-kpi-val mono">{prosp.total.tempo != null ? prosp.total.tempo : "—"}<small>{prosp.total.tempo != null ? " d" : ""}</small></div>
+                <div className="prosp-kpi-lbl">Tempo médio até resposta</div>
+              </div>
+            </div>
+            <div className="prosp-tables">
+              <div className="prosp-table-block">
+                <div className="prosp-table-title">Por segmento</div>
+                <ProspTable rows={prosp.segmentos} />
+              </div>
+              <div className="prosp-table-block">
+                <div className="prosp-table-title">Por mensagem (template)</div>
+                <ProspTable rows={prosp.templates} mono />
+              </div>
+            </div>
+          </React.Fragment>
+        )}
+      </Panel>
+
+      <div className="reports-top">
+        <Panel title="Leads por Segmento" subtitle="Distribuição da carteira">
+          <div className="seg-report">
+            <SegmentPie data={seg} />
+            <SegmentLegend data={seg} />
+          </div>
+        </Panel>
+        <Panel title="Performance por Cidade" subtitle="Volume de leads por praça">
+          <CityBars data={city} />
+        </Panel>
+      </div>
+
+      <Panel title="Evolução de Prospecções" subtitle="Leads abertos vs. fechados — últimos 6 meses">
+        <EvolutionLine data={MONTHLY} />
+      </Panel>
+
+      <Panel title="Resumo por Segmento" subtitle="Métricas consolidadas" noPad>
+        <div className="table-wrap">
+          <table className="data-table summary-table">
+            <thead>
+              <tr>
+                <th>Segmento</th>
+                <th className="num">Leads</th>
+                <th className="num">Reuniões</th>
+                <th className="num">Fechamentos</th>
+                <th className="num">Receita Estimada</th>
+                <th className="num">Ticket Médio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.map((s) => (
+                <tr key={s.segmento}>
+                  <td>
+                    <span className="seg-tag" style={{ "--seg": SEGMENT_COLORS[s.segmento] }}>
+                      <span className="seg-dot" style={{ background: SEGMENT_COLORS[s.segmento] }}></span>
+                      {s.segmento}
+                    </span>
+                  </td>
+                  <td className="num mono">{s.leads}</td>
+                  <td className="num mono">{s.reunioes}</td>
+                  <td className="num mono">{s.fechamentos}</td>
+                  <td className="num mono">{fmtBRL(s.receita)}</td>
+                  <td className="num mono">{s.ticket ? fmtBRL(s.ticket) : "—"}</td>
+                </tr>
+              ))}
+              <tr className="summary-total">
+                <td>Total</td>
+                <td className="num mono">{totals.leads}</td>
+                <td className="num mono">{totals.reunioes}</td>
+                <td className="num mono">{totals.fechamentos}</td>
+                <td className="num mono">{fmtBRL(totals.receita)}</td>
+                <td className="num mono">{totals.fechamentos ? fmtBRL(Math.round(totals.receita / totals.fechamentos)) : "—"}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+Object.assign(window, { Reports });

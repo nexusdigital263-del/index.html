@@ -1,274 +1,62 @@
 // ============================================================
-//  Lead import — CSV parser + smart column mapping + modal
-//  Fecha o ciclo: importar lista → automação dispara o 1º contato.
+//  Icon — lightweight lucide-compatible SVG icon component
+//  Paths are the inner geometry of lucide icons (24x24, stroke).
 // ============================================================
-const { useState: iState, useEffect: iEffect, useRef: iRef } = React;
-
-// ---- CSV parsing -----------------------------------------------------------
-function parseCSV(text) {
-  text = (text || "").replace(/^\uFEFF/, "");
-  const nl = text.indexOf("\n");
-  const firstLine = nl >= 0 ? text.slice(0, nl) : text;
-  // detecta delimitador: ; ou , (o que aparecer mais no cabeçalho)
-  const delim = (firstLine.split(";").length > firstLine.split(",").length) ? ";" : ",";
-  const rows = [];
-  let cur = [], field = "", inQ = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inQ) {
-      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
-      else field += c;
-    } else {
-      if (c === '"') inQ = true;
-      else if (c === delim) { cur.push(field); field = ""; }
-      else if (c === "\n") { cur.push(field); rows.push(cur); cur = []; field = ""; }
-      else if (c === "\r") { /* ignore */ }
-      else field += c;
-    }
-  }
-  if (field.length || cur.length) { cur.push(field); rows.push(cur); }
-  return rows.filter((r) => r.some((c) => (c || "").trim() !== ""));
-}
-
-const _norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-
-const FIELD_ALIASES = {
-  empresa: ["empresa", "company", "razao social", "cliente", "estabelecimento", "nome da empresa"],
-  responsavel: ["contato", "responsavel", "nome contato", "nome do contato", "nome"],
-  cargo: ["cargo", "role", "funcao"],
-  whatsapp: ["whatsapp", "whats", "telefone", "celular", "fone", "phone", "numero", "tel"],
-  segmento: ["segmento", "segment", "ramo", "setor", "categoria"],
-  cidade: ["cidade", "city", "municipio"],
-  valor: ["valor mensal (r$)", "valor mensal", "valor", "ticket", "mensalidade"],
-  status: ["status", "etapa"],
+const ICON_PATHS = {
+  "layout-dashboard": '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+  "users": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  "kanban": '<path d="M6 5v11"/><path d="M12 5v6"/><path d="M18 5v14"/>',
+  "calendar": '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+  "bar-chart": '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  "settings": '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  "phone": '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  "message-circle": '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  "mail": '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+  "search": '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  "chevron-down": '<path d="m6 9 6 6 6-6"/>',
+  "chevron-left": '<path d="m15 18-6-6 6-6"/>',
+  "chevron-right": '<path d="m9 18 6-6-6-6"/>',
+  "x": '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  "plus": '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  "check": '<path d="M20 6 9 17l-5-5"/>',
+  "more-horizontal": '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  "arrow-up-right": '<path d="M7 7h10v10"/><path d="M7 17 17 7"/>',
+  "trending-up": '<path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/>',
+  "trending-down": '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
+  "edit": '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  "building": '<rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/>',
+  "map-pin": '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+  "clock": '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  "log-out": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  "filter": '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+  "briefcase": '<rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+  "user": '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+  "circle-dollar": '<circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/>',
+  "target": '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  "handshake": '<path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/>',
+  "calendar-check": '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/>',
+  "bell": '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',
+  "shield": '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  "palette": '<circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>',
+  "plug": '<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
+  "credit-card": '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
+  "menu": '<line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/>',
+  "external-link": '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  "activity": '<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>',
+  "sun": '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  "moon": '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  "trash": '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+  "download": '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
 };
 
-function mapHeaders(headerRow) {
-  const map = {};
-  headerRow.forEach((h, idx) => {
-    const n = _norm(h);
-    if (!n || n.indexOf("link") >= 0) return; // ignora coluna "Link WhatsApp"
-    for (const field in FIELD_ALIASES) {
-      if (map[field] != null) continue;
-      if (FIELD_ALIASES[field].some((a) => n === a)) { map[field] = idx; return; }
-    }
+function Icon({ name, size = 20, strokeWidth = 2, className = "", style = {} }) {
+  const inner = ICON_PATHS[name] || ICON_PATHS["circle-dollar"];
+  return React.createElement("svg", {
+    width: size, height: size, viewBox: "0 0 24 24", fill: "none",
+    stroke: "currentColor", strokeWidth, strokeLinecap: "round", strokeLinejoin: "round",
+    className: "lucide " + className, style,
+    dangerouslySetInnerHTML: { __html: inner },
   });
-  // segunda passada: correspondência parcial p/ o que faltou
-  headerRow.forEach((h, idx) => {
-    const n = _norm(h);
-    if (!n || n.indexOf("link") >= 0) return;
-    if (Object.values(map).indexOf(idx) >= 0) return;
-    for (const field in FIELD_ALIASES) {
-      if (map[field] != null) continue;
-      if (FIELD_ALIASES[field].some((a) => n.indexOf(a) >= 0)) { map[field] = idx; return; }
-    }
-  });
-  return map;
 }
 
-function matchSegment(v) {
-  const n = _norm(v);
-  if (!n) return "Outros";
-  const found = SEGMENTS.find((s) => _norm(s) === n) || SEGMENTS.find((s) => _norm(s).indexOf(n) >= 0 || n.indexOf(_norm(s)) >= 0);
-  return found || "Outros";
-}
-function matchStatus(v) {
-  const n = _norm(v);
-  if (!n) return "Novo";
-  return STATUS.find((s) => _norm(s) === n) || "Novo";
-}
-function parseValor(v) {
-  if (!v) return 0;
-  const num = String(v).replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".");
-  const n = parseFloat(num);
-  return isNaN(n) ? 0 : Math.round(n);
-}
-
-// Converte linhas do CSV → leads. {leads, total, skipped, noEmpresa, map}
-function rowsToLeads(rows) {
-  if (!rows.length) return { leads: [], total: 0, skipped: 0 };
-  const header = rows[0];
-  const map = mapHeaders(header);
-  if (map.empresa == null) return { leads: [], total: 0, skipped: 0, noEmpresa: true };
-  const out = [];
-  let skipped = 0;
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    const get = (f) => (map[f] != null ? (r[map[f]] || "").trim() : "");
-    const empresa = get("empresa");
-    if (!empresa) { skipped++; continue; }
-    out.push({
-      empresa,
-      responsavel: get("responsavel") || "—",
-      cargo: get("cargo") || "—",
-      whatsapp: get("whatsapp"),
-      segmento: matchSegment(get("segmento")),
-      cidade: get("cidade") || (CITIES[0] || "—"),
-      valor: parseValor(get("valor")) || 1000,
-      status: matchStatus(get("status")),
-      cnpj: "—",
-      prioridade: "Média",
-      diasNoFunil: 0,
-      proximaAcao: "Primeiro contato",
-    });
-  }
-  return { leads: out, total: out.length, skipped, map };
-}
-
-// Valida telefones e detecta duplicados (no arquivo e contra a base existente).
-// Retorna { importable, dupBatch, dupExisting, noPhone, invalidPhone, total }
-function validateImport(leads, existing) {
-  const norm = (raw) => (window.WA ? WA.normalizePhone(raw) : (raw || "").replace(/\D/g, ""));
-  const validLen = (d) => d.length >= 12 && d.length <= 13; // 55 + DDD + 8/9 dígitos
-  const existPhones = {}, existNames = {};
-  (existing || []).forEach((l) => {
-    const d = norm(l.whatsapp); if (d) existPhones[d] = true;
-    existNames[_norm(l.empresa)] = true;
-  });
-  const seenPhone = {}, seenName = {};
-  const importable = [], dupBatch = [], dupExisting = [];
-  let noPhone = 0, invalidPhone = 0;
-  leads.forEach((l) => {
-    const d = norm(l.whatsapp);
-    const nameKey = _norm(l.empresa);
-    // duplicado dentro do arquivo (mesmo telefone ou mesma empresa)
-    if ((d && seenPhone[d]) || (nameKey && seenName[nameKey])) { dupBatch.push(l); return; }
-    // duplicado contra a base já existente
-    if ((d && existPhones[d]) || (nameKey && existNames[nameKey])) { dupExisting.push(l); return; }
-    if (d) seenPhone[d] = true; if (nameKey) seenName[nameKey] = true;
-    if (!d) noPhone++;
-    else if (!validLen(d)) invalidPhone++;
-    importable.push(l);
-  });
-  return { importable, dupBatch: dupBatch.length, dupExisting: dupExisting.length, noPhone, invalidPhone, total: leads.length };
-}
-
-function downloadImportTemplate() {
-  const header = ["Empresa", "Contato", "Cargo", "WhatsApp", "Segmento", "Cidade", "Valor mensal (R$)", "Status"];
-  const sample = ["Clínica Exemplo", "Maria Silva", "Sócia", "(34) 99999-8888", "Clínica Odontológica", "Uberlândia", "1500", "Novo"];
-  const csv = "\uFEFF" + [header, sample].map((r) => r.map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(";")).join("\r\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = "modelo-importacao-leads.csv";
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-// ---- Import modal ----------------------------------------------------------
-function ImportLeadsModal({ open, onClose, onImport, autoOn, intervalMin, existing }) {
-  const [parsed, setParsed] = iState(null);
-  const [fileName, setFileName] = iState("");
-  const [busy, setBusy] = iState(false);
-  const fileRef = iRef(null);
-
-  iEffect(() => { if (open) { setParsed(null); setFileName(""); setBusy(false); } }, [open]);
-  if (!open) return null;
-
-  const onFile = (e) => {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => { setParsed(rowsToLeads(parseCSV(String(reader.result)))); setFileName(f.name); };
-    reader.readAsText(f, "UTF-8");
-  };
-  const doImport = async () => {
-    if (!parsed || !parsed.leads.length) return;
-    const rev = validateImport(parsed.leads, existing || []);
-    if (!rev.importable.length) return;
-    setBusy(true);
-    await onImport(rev.importable);
-    setBusy(false);
-    onClose();
-  };
-
-  const preview = parsed && parsed.leads ? parsed.leads.slice(0, 5) : [];
-  const review = parsed && parsed.leads && parsed.leads.length ? validateImport(parsed.leads, existing || []) : null;
-  const newCount = review ? review.importable.filter((l) => l.status === "Novo").length : 0;
-
-  return (
-    <Modal open={open} onClose={onClose} title="Importar leads (CSV)" width={640}>
-      <div className="form-grid">
-        <div className="import-drop" onClick={() => fileRef.current && fileRef.current.click()}>
-          <span className="import-drop-icon"><Icon name="download" size={20} /></span>
-          <div className="import-drop-text">
-            <strong>{fileName || "Escolher arquivo CSV"}</strong>
-            <span>Clique para selecionar a planilha (.csv) com seus leads</span>
-          </div>
-          <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={onFile} />
-        </div>
-
-        <div className="import-help">
-          <span>Colunas reconhecidas: <strong>Empresa</strong> (obrigatória), Contato, Cargo, WhatsApp, Segmento, Cidade, Valor, Status.</span>
-          <button className="bulk-link" onClick={downloadImportTemplate}>Baixar modelo de planilha</button>
-        </div>
-
-        {parsed && parsed.noEmpresa && (
-          <div className="auth-msg err">Não encontrei a coluna <strong>Empresa</strong>. Confira o cabeçalho da planilha ou baixe o modelo acima.</div>
-        )}
-        {parsed && !parsed.noEmpresa && parsed.total === 0 && (
-          <div className="auth-msg err">Nenhum lead válido encontrado no arquivo.</div>
-        )}
-
-        {parsed && !parsed.noEmpresa && parsed.total > 0 && (
-          <React.Fragment>
-            <div className="import-summary">
-              <span className="import-stat"><strong className="mono">{review ? review.importable.length : parsed.total}</strong> leads a importar</span>
-              {parsed.skipped > 0 && <span className="import-stat muted">{parsed.skipped} sem empresa ignorada(s)</span>}
-              {review && (review.dupBatch + review.dupExisting) > 0 && <span className="import-stat warn">{review.dupBatch + review.dupExisting} duplicado(s) removido(s)</span>}
-            </div>
-
-            {review && (review.invalidPhone > 0 || review.noPhone > 0 || review.dupExisting > 0) && (
-              <div className="import-checks">
-                {review.dupExisting > 0 && <div className="import-check"><Icon name="check" size={13} /> {review.dupExisting} já existem na sua base (não serão duplicados)</div>}
-                {review.dupBatch > 0 && <div className="import-check"><Icon name="check" size={13} /> {review.dupBatch} repetido(s) dentro do arquivo</div>}
-                {review.invalidPhone > 0 && <div className="import-check warn"><Icon name="message-circle" size={13} /> {review.invalidPhone} com telefone inválido — serão importados, mas não recebem WhatsApp</div>}
-                {review.noPhone > 0 && <div className="import-check warn"><Icon name="message-circle" size={13} /> {review.noPhone} sem telefone — serão importados sem envio</div>}
-              </div>
-            )}
-
-            <div className="import-preview">
-              <table className="data-table">
-                <thead><tr><th>Empresa</th><th>Contato</th><th>WhatsApp</th><th>Segmento</th><th>Cidade</th></tr></thead>
-                <tbody>
-                  {preview.map((l, i) => (
-                    <tr key={i}>
-                      <td><span className="cell-empresa-name">{l.empresa}</span></td>
-                      <td className="cell-muted">{l.responsavel}</td>
-                      <td className="cell-muted mono">{l.whatsapp || "—"}</td>
-                      <td><span className="seg-tag"><span className="seg-dot" style={{ background: SEGMENT_COLORS[l.segmento] || COLORS.purple }}></span>{l.segmento}</span></td>
-                      <td className="cell-muted">{l.cidade}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {parsed.total > preview.length && <div className="import-more">+ {parsed.total - preview.length} outros…</div>}
-            </div>
-
-            {autoOn && newCount > 0 && (
-              <div className="wa-mode live">
-                <Icon name="message-circle" size={15} />
-                <span><strong>Automação ligada:</strong> {newCount} lead(s) "Novo" receberão o 1º contato por WhatsApp automaticamente{intervalMin > 0 ? `, 1 a cada ${intervalMin} min` : ""}.</span>
-              </div>
-            )}
-            {!autoOn && (
-              <div className="wa-mode sim">
-                <Icon name="message-circle" size={15} />
-                <span>Dica: ative a <strong>automação de 1º contato</strong> (Configurações → WhatsApp) para disparar a prospecção automaticamente ao importar.</span>
-              </div>
-            )}
-          </React.Fragment>
-        )}
-      </div>
-
-      <div className="modal-foot">
-        <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-        <button className="btn btn-primary" disabled={busy || !review || !review.importable.length} onClick={doImport}>
-          <Icon name="download" size={15} /> {busy ? "Importando…" : (review && review.importable.length ? `Importar ${review.importable.length} leads` : "Importar")}
-        </button>
-      </div>
-    </Modal>
-  );
-}
-
-Object.assign(window, { ImportLeadsModal, parseCSV, rowsToLeads, validateImport });
+Object.assign(window, { Icon, ICON_PATHS });

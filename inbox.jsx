@@ -1,282 +1,274 @@
 // ============================================================
-//  Conversas — mini-CRM / caixa de entrada do WhatsApp
-//  Mostra os leads que estão em conversa (respostas recebidas e
-//  mensagens enviadas) num layout de chat: lista + thread + resposta.
+//  Lead import — CSV parser + smart column mapping + modal
+//  Fecha o ciclo: importar lista → automação dispara o 1º contato.
 // ============================================================
-const { useState: iState, useMemo: iMemo, useEffect: iEffect, useRef: iRef } = React;
+const { useState: iState, useEffect: iEffect, useRef: iRef } = React;
 
-// hora (HH:MM) a partir do timestamp real da mensagem; volta "" se não houver
-function msgTime(m) {
-  let t = m.ts ? Number(m.ts) : null;
-  if (t == null) { const mm = /^in-(\d{10,})/.exec(m.id || ""); if (mm) t = Number(mm[1]); }
-  if (t == null) return "";
-  const d = new Date(t);
-  if (isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-}
-
-// status de entrega de uma mensagem enviada (✓ enviado, ✓✓ entregue, ✓✓ lido azul, ⚠ falhou)
-function MsgStatus({ status }) {
-  if (status === "failed") return <span className="msg-status failed" title="Falha no envio"> ⚠</span>;
-  const cls = status === "read" ? "read" : (status === "delivered" ? "delivered" : "sent");
-  const title = status === "read" ? "Lido" : (status === "delivered" ? "Entregue" : "Enviado");
-  const double = status === "delivered" || status === "read";
-  return (
-    <span className={"msg-status " + cls} title={title}>
-      <svg width="16" height="11" viewBox="0 0 18 11" fill="none" aria-hidden="true">
-        <path d="M1 5.8 4 9l6.5-7.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        {double && <path d="M7 9l1 0.9L14.8 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />}
-      </svg>
-    </span>
-  );
-}
-
-// rótulo curto para o chip de resposta rápida
-function quickLabel(q) {
-  const w = q.split(/\s+/).slice(0, 4).join(" ");
-  return w.length < q.length ? w + "…" : w;
-}
-
-// mensagens de WhatsApp de um lead (enviadas + recebidas), em ordem cronológica.
-// Ordena por timestamp real (ts). Mensagens antigas sem ts mantêm a ordem de
-// inserção do array (que já é cronológica) — NÃO usa a data, que pode ser fixa.
-function inResolveTs(it) {
-  if (it.ts) return Number(it.ts);
-  const m = /^in-(\d{10,})/.exec(it.id || "");
-  if (m) return Number(m[1]); // recebidas antigas têm o tempo embutido no id
-  return null;
-}
-function waThread(lead) {
-  const arr = (lead.interacoes || []).filter((it) => it.dir === "in" || it.tipo === "WhatsApp");
-  let last = 0;
-  const tagged = arr.map((it, i) => {
-    let t = inResolveTs(it);
-    if (t == null) { t = last + 1; } // sem tempo: logo após a anterior (preserva ordem do array)
-    else if (t < last) { t = last + 1; } // mantém monotônico se vier fora de ordem
-    last = t;
-    return { it, i, t };
-  });
-  tagged.sort((a, b) => a.t - b.t || a.i - b.i);
-  return tagged.map((x) => x.it);
-}
-function lastThreadDate(msgs) {
-  return msgs.length ? msgs[msgs.length - 1].data || "" : "";
-}
-
-function InboxScreen({ leads, onReply, onMarkRead, onClearConversation, onSetOptOut, onMoveLead, onOpenLead }) {
-  const convos = iMemo(() => {
-    return leads
-      .map((l) => {
-        const msgs = waThread(l);
-        return { lead: l, msgs, last: lastThreadDate(msgs), hasReply: msgs.some((m) => m.dir === "in") };
-      })
-      .filter((c) => c.msgs.length > 0)
-      .sort((a, b) => {
-        const ua = a.lead.unread || 0, ub = b.lead.unread || 0;
-        if (ub !== ua) return ub - ua;            // não lidas primeiro
-        return (b.last || "").localeCompare(a.last || ""); // depois mais recentes
-      });
-  }, [leads]);
-
-  const [selId, setSelId] = iState(null);
-  const [filter, setFilter] = iState("all"); // all | unread | replied
-  const [search, setSearch] = iState("");
-  const [reply, setReply] = iState("");
-  const chatRef = iRef(null);
-
-  const totalUnread = iMemo(() => convos.reduce((s, c) => s + (c.lead.unread || 0), 0), [convos]);
-
-  const filtered = iMemo(() => {
-    const q = search.trim().toLowerCase();
-    return convos.filter((c) => {
-      if (filter === "unread" && !(c.lead.unread > 0)) return false;
-      if (filter === "replied" && !c.hasReply) return false;
-      if (q && !(`${c.lead.empresa} ${c.lead.responsavel}`.toLowerCase().includes(q))) return false;
-      return true;
-    });
-  }, [convos, filter, search]);
-
-  // seleção inicial / mantém uma conversa válida selecionada
-  iEffect(() => {
-    if (!convos.length) { if (selId != null) setSelId(null); return; }
-    if (selId == null || !convos.some((c) => c.lead.id === selId)) {
-      setSelId((filtered[0] || convos[0]).lead.id);
+// ---- CSV parsing -----------------------------------------------------------
+function parseCSV(text) {
+  text = (text || "").replace(/^\uFEFF/, "");
+  const nl = text.indexOf("\n");
+  const firstLine = nl >= 0 ? text.slice(0, nl) : text;
+  // detecta delimitador: ; ou , (o que aparecer mais no cabeçalho)
+  const delim = (firstLine.split(";").length > firstLine.split(",").length) ? ";" : ",";
+  const rows = [];
+  let cur = [], field = "", inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === delim) { cur.push(field); field = ""; }
+      else if (c === "\n") { cur.push(field); rows.push(cur); cur = []; field = ""; }
+      else if (c === "\r") { /* ignore */ }
+      else field += c;
     }
-  }, [convos, filtered]);
-
-  const sel = convos.find((c) => c.lead.id === selId) || null;
-
-  // marca como lida ao abrir
-  iEffect(() => {
-    if (sel && sel.lead.unread > 0) onMarkRead(sel.lead.id);
-  }, [selId, sel && sel.lead.unread]);
-
-  // rola o chat para o fim quando muda a conversa ou chegam mensagens
-  iEffect(() => {
-    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
-  }, [selId, sel && sel.msgs.length]);
-
-  const selectConvo = (id) => { setSelId(id); setReply(""); };
-  const removeConvo = (lead) => {
-    if (window.confirm(`Excluir a conversa com "${lead.empresa}"? As mensagens trocadas no WhatsApp serão removidas. O lead continua na sua base.`)) {
-      onClearConversation(lead.id);
-    }
-  };
-  const sendReply = () => {
-    if (!reply.trim() || !sel) return;
-    onReply(sel.lead.id, reply.trim());
-    setReply("");
-  };
-
-  const connected = window.WA ? WA.isConnected() : false;
-
-  if (!convos.length) {
-    return (
-      <div className="screen-pad fade-in">
-        <div className="empty-state inbox-empty">
-          <span className="inbox-empty-icon"><Icon name="message-circle" size={30} /></span>
-          <p>Nenhuma conversa ainda.</p>
-          <span className="inbox-empty-sub">Quando seus leads responderem à prospecção no WhatsApp, as conversas aparecem aqui — como num mini-CRM de atendimento.</span>
-        </div>
-      </div>
-    );
   }
+  if (field.length || cur.length) { cur.push(field); rows.push(cur); }
+  return rows.filter((r) => r.some((c) => (c || "").trim() !== ""));
+}
+
+const _norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+const FIELD_ALIASES = {
+  empresa: ["empresa", "company", "razao social", "cliente", "estabelecimento", "nome da empresa"],
+  responsavel: ["contato", "responsavel", "nome contato", "nome do contato", "nome"],
+  cargo: ["cargo", "role", "funcao"],
+  whatsapp: ["whatsapp", "whats", "telefone", "celular", "fone", "phone", "numero", "tel"],
+  segmento: ["segmento", "segment", "ramo", "setor", "categoria"],
+  cidade: ["cidade", "city", "municipio"],
+  valor: ["valor mensal (r$)", "valor mensal", "valor", "ticket", "mensalidade"],
+  status: ["status", "etapa"],
+};
+
+function mapHeaders(headerRow) {
+  const map = {};
+  headerRow.forEach((h, idx) => {
+    const n = _norm(h);
+    if (!n || n.indexOf("link") >= 0) return; // ignora coluna "Link WhatsApp"
+    for (const field in FIELD_ALIASES) {
+      if (map[field] != null) continue;
+      if (FIELD_ALIASES[field].some((a) => n === a)) { map[field] = idx; return; }
+    }
+  });
+  // segunda passada: correspondência parcial p/ o que faltou
+  headerRow.forEach((h, idx) => {
+    const n = _norm(h);
+    if (!n || n.indexOf("link") >= 0) return;
+    if (Object.values(map).indexOf(idx) >= 0) return;
+    for (const field in FIELD_ALIASES) {
+      if (map[field] != null) continue;
+      if (FIELD_ALIASES[field].some((a) => n.indexOf(a) >= 0)) { map[field] = idx; return; }
+    }
+  });
+  return map;
+}
+
+function matchSegment(v) {
+  const n = _norm(v);
+  if (!n) return "Outros";
+  const found = SEGMENTS.find((s) => _norm(s) === n) || SEGMENTS.find((s) => _norm(s).indexOf(n) >= 0 || n.indexOf(_norm(s)) >= 0);
+  return found || "Outros";
+}
+function matchStatus(v) {
+  const n = _norm(v);
+  if (!n) return "Novo";
+  return STATUS.find((s) => _norm(s) === n) || "Novo";
+}
+function parseValor(v) {
+  if (!v) return 0;
+  const num = String(v).replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(num);
+  return isNaN(n) ? 0 : Math.round(n);
+}
+
+// Converte linhas do CSV → leads. {leads, total, skipped, noEmpresa, map}
+function rowsToLeads(rows) {
+  if (!rows.length) return { leads: [], total: 0, skipped: 0 };
+  const header = rows[0];
+  const map = mapHeaders(header);
+  if (map.empresa == null) return { leads: [], total: 0, skipped: 0, noEmpresa: true };
+  const out = [];
+  let skipped = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const get = (f) => (map[f] != null ? (r[map[f]] || "").trim() : "");
+    const empresa = get("empresa");
+    if (!empresa) { skipped++; continue; }
+    out.push({
+      empresa,
+      responsavel: get("responsavel") || "—",
+      cargo: get("cargo") || "—",
+      whatsapp: get("whatsapp"),
+      segmento: matchSegment(get("segmento")),
+      cidade: get("cidade") || (CITIES[0] || "—"),
+      valor: parseValor(get("valor")) || 1000,
+      status: matchStatus(get("status")),
+      cnpj: "—",
+      prioridade: "Média",
+      diasNoFunil: 0,
+      proximaAcao: "Primeiro contato",
+    });
+  }
+  return { leads: out, total: out.length, skipped, map };
+}
+
+// Valida telefones e detecta duplicados (no arquivo e contra a base existente).
+// Retorna { importable, dupBatch, dupExisting, noPhone, invalidPhone, total }
+function validateImport(leads, existing) {
+  const norm = (raw) => (window.WA ? WA.normalizePhone(raw) : (raw || "").replace(/\D/g, ""));
+  const validLen = (d) => d.length >= 12 && d.length <= 13; // 55 + DDD + 8/9 dígitos
+  const existPhones = {}, existNames = {};
+  (existing || []).forEach((l) => {
+    const d = norm(l.whatsapp); if (d) existPhones[d] = true;
+    existNames[_norm(l.empresa)] = true;
+  });
+  const seenPhone = {}, seenName = {};
+  const importable = [], dupBatch = [], dupExisting = [];
+  let noPhone = 0, invalidPhone = 0;
+  leads.forEach((l) => {
+    const d = norm(l.whatsapp);
+    const nameKey = _norm(l.empresa);
+    // duplicado dentro do arquivo (mesmo telefone ou mesma empresa)
+    if ((d && seenPhone[d]) || (nameKey && seenName[nameKey])) { dupBatch.push(l); return; }
+    // duplicado contra a base já existente
+    if ((d && existPhones[d]) || (nameKey && existNames[nameKey])) { dupExisting.push(l); return; }
+    if (d) seenPhone[d] = true; if (nameKey) seenName[nameKey] = true;
+    if (!d) noPhone++;
+    else if (!validLen(d)) invalidPhone++;
+    importable.push(l);
+  });
+  return { importable, dupBatch: dupBatch.length, dupExisting: dupExisting.length, noPhone, invalidPhone, total: leads.length };
+}
+
+function downloadImportTemplate() {
+  const header = ["Empresa", "Contato", "Cargo", "WhatsApp", "Segmento", "Cidade", "Valor mensal (R$)", "Status"];
+  const sample = ["Clínica Exemplo", "Maria Silva", "Sócia", "(34) 99999-8888", "Clínica Odontológica", "Uberlândia", "1500", "Novo"];
+  const csv = "\uFEFF" + [header, sample].map((r) => r.map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(";")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "modelo-importacao-leads.csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ---- Import modal ----------------------------------------------------------
+function ImportLeadsModal({ open, onClose, onImport, autoOn, intervalMin, existing }) {
+  const [parsed, setParsed] = iState(null);
+  const [fileName, setFileName] = iState("");
+  const [busy, setBusy] = iState(false);
+  const fileRef = iRef(null);
+
+  iEffect(() => { if (open) { setParsed(null); setFileName(""); setBusy(false); } }, [open]);
+  if (!open) return null;
+
+  const onFile = (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => { setParsed(rowsToLeads(parseCSV(String(reader.result)))); setFileName(f.name); };
+    reader.readAsText(f, "UTF-8");
+  };
+  const doImport = async () => {
+    if (!parsed || !parsed.leads.length) return;
+    const rev = validateImport(parsed.leads, existing || []);
+    if (!rev.importable.length) return;
+    setBusy(true);
+    await onImport(rev.importable);
+    setBusy(false);
+    onClose();
+  };
+
+  const preview = parsed && parsed.leads ? parsed.leads.slice(0, 5) : [];
+  const review = parsed && parsed.leads && parsed.leads.length ? validateImport(parsed.leads, existing || []) : null;
+  const newCount = review ? review.importable.filter((l) => l.status === "Novo").length : 0;
 
   return (
-    <div className="inbox-screen fade-in">
-      {/* ---- lista de conversas ---- */}
-      <aside className="inbox-list">
-        <div className="inbox-list-head">
-          <div className="search-input inbox-search">
-            <Icon name="search" size={15} className="search-icon" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar conversa..." />
+    <Modal open={open} onClose={onClose} title="Importar leads (CSV)" width={640}>
+      <div className="form-grid">
+        <div className="import-drop" onClick={() => fileRef.current && fileRef.current.click()}>
+          <span className="import-drop-icon"><Icon name="download" size={20} /></span>
+          <div className="import-drop-text">
+            <strong>{fileName || "Escolher arquivo CSV"}</strong>
+            <span>Clique para selecionar a planilha (.csv) com seus leads</span>
           </div>
-          <div className="inbox-filters">
-            {[["all", "Todas"], ["unread", "Não lidas"], ["replied", "Responderam"]].map(([k, lbl]) => (
-              <button key={k} className={"inbox-filter" + (filter === k ? " active" : "")} onClick={() => setFilter(k)}>
-                {lbl}{k === "unread" && totalUnread > 0 ? ` ${totalUnread}` : ""}
-              </button>
-            ))}
-          </div>
+          <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={onFile} />
         </div>
-        <div className="inbox-convos">
-          {filtered.map((c) => {
-            const last = c.msgs[c.msgs.length - 1];
-            const preview = last ? (last.dir === "in" ? "" : "Você: ") + (last.nota || "") : "";
-            return (
-              <button key={c.lead.id}
-                className={"inbox-convo" + (c.lead.id === selId ? " active" : "") + (c.lead.unread > 0 ? " unread" : "")}
-                onClick={() => selectConvo(c.lead.id)}>
-                <Avatar initials={c.lead.dono} size={42} />
-                <div className="inbox-convo-main">
-                  <div className="inbox-convo-top">
-                    <span className="inbox-convo-name">{c.lead.empresa}</span>
-                    <span className="inbox-convo-date mono">{fmtDate(c.last)}</span>
-                  </div>
-                  <div className="inbox-convo-bottom">
-                    <span className="inbox-convo-preview">{preview}</span>
-                    {c.lead.unread > 0 && <span className="inbox-unread-pill">{c.lead.unread}</span>}
-                  </div>
-                  <div className="inbox-convo-tags">
-                    <span className="seg-tag"><span className="seg-dot" style={{ background: SEGMENT_COLORS[c.lead.segmento] || COLORS.blue }}></span>{c.lead.segmento}</span>
-                    {!c.hasReply && <span className="inbox-tag-sent">aguardando resposta</span>}
-                  </div>
-                </div>
-                <span className="inbox-convo-del" title="Excluir conversa" role="button"
-                  onClick={(e) => { e.stopPropagation(); removeConvo(c.lead); }}>
-                  <Icon name="trash" size={15} />
-                </span>
-              </button>
-            );
-          })}
-          {!filtered.length && <div className="inbox-empty-list">Nenhuma conversa neste filtro.</div>}
-        </div>
-      </aside>
 
-      {/* ---- thread + resposta ---- */}
-      <section className="inbox-thread">
-        {sel ? (
+        <div className="import-help">
+          <span>Colunas reconhecidas: <strong>Empresa</strong> (obrigatória), Contato, Cargo, WhatsApp, Segmento, Cidade, Valor, Status.</span>
+          <button className="bulk-link" onClick={downloadImportTemplate}>Baixar modelo de planilha</button>
+        </div>
+
+        {parsed && parsed.noEmpresa && (
+          <div className="auth-msg err">Não encontrei a coluna <strong>Empresa</strong>. Confira o cabeçalho da planilha ou baixe o modelo acima.</div>
+        )}
+        {parsed && !parsed.noEmpresa && parsed.total === 0 && (
+          <div className="auth-msg err">Nenhum lead válido encontrado no arquivo.</div>
+        )}
+
+        {parsed && !parsed.noEmpresa && parsed.total > 0 && (
           <React.Fragment>
-            <header className="inbox-thread-head">
-              <div className="inbox-thread-id">
-                <Avatar initials={sel.lead.dono} size={40} />
-                <div className="inbox-thread-meta">
-                  <h3>{sel.lead.empresa}</h3>
-                  <span className="inbox-thread-sub">{sel.lead.responsavel}{sel.lead.whatsapp ? " · " + sel.lead.whatsapp : ""}</span>
-                </div>
-              </div>
-              <div className="inbox-thread-actions">
-                {onMoveLead ? (
-                  <div className="inbox-status-wrap select-wrap" title="Mover no funil">
-                    <select className="select inbox-status-select" value={sel.lead.status}
-                      style={{ "--st": (STATUS_META[sel.lead.status] || {}).color || COLORS.blue }}
-                      onChange={(e) => onMoveLead(sel.lead.id, e.target.value)}>
-                      {STATUS.map((s) => <option key={s} value={s}>{(STATUS_META[s] || {}).kanban || s}</option>)}
-                    </select>
-                    <Icon name="chevron-down" size={14} className="select-chevron" />
-                  </div>
-                ) : <StatusBadge status={sel.lead.status} />}
-                <button className="btn btn-ghost btn-sm" onClick={() => onOpenLead(sel.lead.id)}>
-                  <Icon name="external-link" size={14} /> Abrir lead
-                </button>
-                {onSetOptOut && (leadOptedOut(sel.lead)
-                  ? <button className="btn btn-ghost btn-sm" title="Reativar envios" onClick={() => onSetOptOut(sel.lead.id, false)}><Icon name="check" size={14} /> Reativar</button>
-                  : <button className="btn btn-ghost btn-sm inbox-optout-btn" title="Não enviar mais mensagens" onClick={() => { if (window.confirm(`Marcar "${sel.lead.empresa}" como opt-out? Ele não receberá mais mensagens automáticas.`)) onSetOptOut(sel.lead.id, true); }}><Icon name="shield" size={14} /> Opt-out</button>)}
-                <button className="icon-btn inbox-thread-del" title="Excluir conversa" onClick={() => removeConvo(sel.lead)}>
-                  <Icon name="trash" size={16} />
-                </button>
-              </div>
-            </header>
-
-            {leadOptedOut(sel.lead) && (
-              <div className="inbox-optout-banner"><Icon name="shield" size={14} /> Lead descadastrado (opt-out) — envios automáticos estão bloqueados para este contato.</div>
-            )}
-
-            <div className="inbox-chat" ref={chatRef}>
-              {sel.msgs.map((m) => {
-                const inbound = m.dir === "in";
-                return (
-                  <div key={m.id} className={"chat-row " + (inbound ? "in" : "out")}>
-                    <div className="chat-bubble">
-                      <div className="chat-text">{m.nota}</div>
-                      <div className="chat-time mono">
-                        {fmtDate(m.data)}{msgTime(m) ? " · " + msgTime(m) : ""}
-                        {!inbound && <MsgStatus status={m.status} />}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="import-summary">
+              <span className="import-stat"><strong className="mono">{review ? review.importable.length : parsed.total}</strong> leads a importar</span>
+              {parsed.skipped > 0 && <span className="import-stat muted">{parsed.skipped} sem empresa ignorada(s)</span>}
+              {review && (review.dupBatch + review.dupExisting) > 0 && <span className="import-stat warn">{review.dupBatch + review.dupExisting} duplicado(s) removido(s)</span>}
             </div>
 
-            {sel.lead.whatsapp && (
-              <div className="inbox-quick">
-                {WA.getQuickReplies().map((q, i) => (
-                  <button key={i} className="inbox-quick-chip" title={q} onClick={() => setReply(q)}>{quickLabel(q)}</button>
-                ))}
+            {review && (review.invalidPhone > 0 || review.noPhone > 0 || review.dupExisting > 0) && (
+              <div className="import-checks">
+                {review.dupExisting > 0 && <div className="import-check"><Icon name="check" size={13} /> {review.dupExisting} já existem na sua base (não serão duplicados)</div>}
+                {review.dupBatch > 0 && <div className="import-check"><Icon name="check" size={13} /> {review.dupBatch} repetido(s) dentro do arquivo</div>}
+                {review.invalidPhone > 0 && <div className="import-check warn"><Icon name="message-circle" size={13} /> {review.invalidPhone} com telefone inválido — serão importados, mas não recebem WhatsApp</div>}
+                {review.noPhone > 0 && <div className="import-check warn"><Icon name="message-circle" size={13} /> {review.noPhone} sem telefone — serão importados sem envio</div>}
               </div>
             )}
 
-            <div className="inbox-composer">
-              <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={1}
-                placeholder={sel.lead.whatsapp ? "Escreva uma resposta…  (Ctrl+Enter envia)" : "Lead sem número de WhatsApp"}
-                disabled={!sel.lead.whatsapp}
-                className="textarea inbox-composer-input"
-                onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendReply(); }} />
-              <button className="btn btn-wa inbox-send" onClick={sendReply} disabled={!reply.trim() || !sel.lead.whatsapp}>
-                <Icon name="message-circle" size={16} /> Enviar
-              </button>
+            <div className="import-preview">
+              <table className="data-table">
+                <thead><tr><th>Empresa</th><th>Contato</th><th>WhatsApp</th><th>Segmento</th><th>Cidade</th></tr></thead>
+                <tbody>
+                  {preview.map((l, i) => (
+                    <tr key={i}>
+                      <td><span className="cell-empresa-name">{l.empresa}</span></td>
+                      <td className="cell-muted">{l.responsavel}</td>
+                      <td className="cell-muted mono">{l.whatsapp || "—"}</td>
+                      <td><span className="seg-tag"><span className="seg-dot" style={{ background: SEGMENT_COLORS[l.segmento] || COLORS.purple }}></span>{l.segmento}</span></td>
+                      <td className="cell-muted">{l.cidade}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {parsed.total > preview.length && <div className="import-more">+ {parsed.total - preview.length} outros…</div>}
             </div>
-            {!connected && (
-              <div className="inbox-sim-note">Modo simulação — as respostas entram na timeline mas não são enviadas de verdade até conectar a API da Meta.</div>
+
+            {autoOn && newCount > 0 && (
+              <div className="wa-mode live">
+                <Icon name="message-circle" size={15} />
+                <span><strong>Automação ligada:</strong> {newCount} lead(s) "Novo" receberão o 1º contato por WhatsApp automaticamente{intervalMin > 0 ? `, 1 a cada ${intervalMin} min` : ""}.</span>
+              </div>
+            )}
+            {!autoOn && (
+              <div className="wa-mode sim">
+                <Icon name="message-circle" size={15} />
+                <span>Dica: ative a <strong>automação de 1º contato</strong> (Configurações → WhatsApp) para disparar a prospecção automaticamente ao importar.</span>
+              </div>
             )}
           </React.Fragment>
-        ) : (
-          <div className="inbox-noselect">Selecione uma conversa à esquerda.</div>
         )}
-      </section>
-    </div>
+      </div>
+
+      <div className="modal-foot">
+        <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+        <button className="btn btn-primary" disabled={busy || !review || !review.importable.length} onClick={doImport}>
+          <Icon name="download" size={15} /> {busy ? "Importando…" : (review && review.importable.length ? `Importar ${review.importable.length} leads` : "Importar")}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
-Object.assign(window, { InboxScreen });
+Object.assign(window, { ImportLeadsModal, parseCSV, rowsToLeads, validateImport });
