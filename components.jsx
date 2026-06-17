@@ -342,7 +342,13 @@ function App() {
     timer = setTimeout(loop, SLOW);
     const onVis = () => { if (!document.hidden) poll(); };
     document.addEventListener("visibilitychange", onVis);
-    return () => { alive = false; if (timer) clearTimeout(timer); document.removeEventListener("visibilitychange", onVis); };
+    // tempo real: assina mudanças e busca na hora (se Realtime estiver habilitado)
+    let unsub = null;
+    SB.subscribeLeads(() => { if (alive && !document.hidden) poll(); }).then((fn) => {
+      if (!alive) { if (fn) fn(); return; }
+      unsub = fn;
+    });
+    return () => { alive = false; if (timer) clearTimeout(timer); document.removeEventListener("visibilitychange", onVis); if (unsub) unsub(); };
   }, [currentId]);
 
   const addInteraction = useCallback((id, { tipo, nota }) => {
@@ -747,6 +753,42 @@ function App() {
     toast(WA.isConnected() ? "Resposta enviada" : "Resposta registrada (simulação)", WA.isConnected() ? "success" : "info");
   }, [sendOne]);
 
+  // envia mídia (imagem/documento) numa conversa e registra na timeline
+  const sendMediaWhatsApp = useCallback((id, file, caption) => {
+    const lead = leadsRef.current.find((l) => l.id === id);
+    if (!lead || !file) return;
+    if (file.size > 16 * 1024 * 1024) { toast("Arquivo muito grande (máx. 16 MB)", "error"); return; }
+    const isImg = /^image\//.test(file.type);
+    const kind = isImg ? "image" : "document";
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = String(reader.result || "").split(",")[1] || "";
+      const media = { base64, mime: file.type || "application/octet-stream", filename: file.name, kind, caption: caption || "" };
+      const itId = uid();
+      const noteIcon = isImg ? "📷" : "📄";
+      const note = (caption && caption.trim()) ? `${noteIcon} ${caption.trim()}` : `${noteIcon} ${file.name}`;
+      Promise.resolve(WA.sendMedia(lead, media)).then((r) => {
+        if (r && r.ok === false) {
+          WA.logError(lead.id, lead.empresa, r.error);
+          toast(`Falha ao enviar arquivo: ${traduzWaErro(r.error)}`, "error");
+          patchInteraction(id, itId, { status: "failed" }, true);
+        } else if (r && r.simulated) {
+          setTimeout(() => patchInteraction(id, itId, { status: "delivered" }, false), 1300);
+        } else if (r && r.ok && r.wamid) {
+          patchInteraction(id, itId, { wamid: r.wamid }, true);
+        }
+      }).catch(() => {});
+      if (WA.isConnected()) WA.incDaily(1);
+      const it = { id: itId, data: nowDate(), ts: Date.now(), tipo: "WhatsApp", dir: "out", nota: note, status: "sent",
+        media: { kind, filename: file.name } };
+      const interacoes = [...lead.interacoes, it];
+      setLeads((prev) => prev.map((l) => l.id === id ? { ...l, interacoes, ultimoContato: nowDate() } : l));
+      if (REMOTE) sync(() => SB.patchLead(Number(id), { interacoes, ultimoContato: nowDate() }));
+      toast(WA.isConnected() ? "Arquivo enviado" : "Arquivo registrado (simulação)", WA.isConnected() ? "success" : "info");
+    };
+    reader.readAsDataURL(file);
+  }, [sync, patchInteraction]);
+
   // ---- auth + users ----
   const loginDemo = useCallback((id) => { setCurrentId(id); setPage("dashboard"); setCollapsed(false); }, []);
 
@@ -863,7 +905,7 @@ function App() {
             canDelete={canDelete} canCreate={canCreate} onBulkWhatsApp={openWhatsAppBulk}
             onImportLeads={importLeads}
             onDeleteLead={deleteLead} onDeleteLeads={deleteLeads} />}
-          {hasAccess && page === "inbox" && <InboxScreen leads={visibleLeads} onReply={replyWhatsApp} onMarkRead={markRead} onClearConversation={clearConversation} onSetOptOut={setOptOut} onMoveLead={moveLead} onOpenLead={openLead} />}
+          {hasAccess && page === "inbox" && <InboxScreen leads={visibleLeads} onReply={replyWhatsApp} onMarkRead={markRead} onClearConversation={clearConversation} onSetOptOut={setOptOut} onMoveLead={moveLead} onSendMedia={sendMediaWhatsApp} onOpenLead={openLead} />}
           {hasAccess && page === "kanban" && <Kanban leads={visibleLeads} onOpenLead={openLead} onMoveLead={moveLead} />}
           {hasAccess && page === "agenda" && <Agenda tasks={visibleTasks} leads={visibleLeads} onToggleTask={toggleTask} onAddTask={addTask} onDeleteTask={deleteTask} />}
           {hasAccess && page === "reports" && <Reports leads={visibleLeads} />}

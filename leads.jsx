@@ -1,102 +1,424 @@
 // ============================================================
-//  Kanban screen — draggable cards (HTML5 DnD via React state)
+//  Leads screen — table, filters, search, pagination + drawer
 // ============================================================
-const KANBAN_COLS = [
-  { status: "Novo",             label: "Prospecção",       icon: "circle-dollar" },
-  { status: "Em Contato",       label: "Contato Feito",    icon: "phone" },
-  { status: "Reunião Agendada", label: "Reunião Agendada", icon: "calendar" },
-  { status: "Proposta Enviada", label: "Proposta Enviada", icon: "mail" },
-  { status: "Fechado",          label: "Fechado",          icon: "check" },
-  { status: "Perdido",          label: "Perdido",          icon: "x" },
-];
+const PAGE_SIZE = 8;
 
-function KanbanCard({ lead, onOpenLead, onDragStart, onDragEnd, dragging }) {
+// ---- CSV export ------------------------------------------------------------
+function waDigits(raw) {
+  let d = (raw || "").replace(/\D/g, "");
+  if (!d) return "";
+  if (d.length <= 11) d = "55" + d; // adiciona DDI Brasil se faltar
+  return d;
+}
+function csvCell(v) {
+  const s = (v == null ? "" : String(v)).replace(/"/g, '""');
+  return '"' + s + '"';
+}
+function exportLeadsCSV(list, sufixo) {
+  if (!list || !list.length) { if (window.toast) toast("Nenhum lead para exportar", "info"); return; }
+  const cols = [
+    "Empresa", "Contato", "Cargo", "WhatsApp", "Link WhatsApp",
+    "Segmento", "Cidade", "Status", "Responsável", "Valor mensal (R$)",
+    "Último contato", "Próxima ação",
+  ];
+  const lines = [cols.map(csvCell).join(";")];
+  list.forEach((l) => {
+    const dig = waDigits(l.whatsapp);
+    const dono = (window.userInfo ? userInfo(l.dono).name : l.dono);
+    lines.push([
+      l.empresa, l.responsavel, l.cargo, l.whatsapp, dig ? "https://wa.me/" + dig : "",
+      l.segmento, l.cidade, l.status, dono, l.valor,
+      l.ultimoContato, l.proximaAcao,
+    ].map(csvCell).join(";"));
+  });
+  const csv = "\uFEFF" + lines.join("\r\n"); // BOM p/ acentos no Excel
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const date = "2026-06-09";
+  a.href = url;
+  a.download = `leads-nexuscrm${sufixo ? "-" + sufixo : ""}-${date}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  if (window.toast) toast(`${list.length} lead${list.length !== 1 ? "s" : ""} exportado${list.length !== 1 ? "s" : ""} (CSV)`, "success");
+}
+
+function CheckBox({ checked, indeterminate, onChange, title }) {
   return (
-    <div
-      className={"kanban-card" + (dragging ? " dragging" : "")}
-      draggable
-      onDragStart={(e) => onDragStart(e, lead.id)}
-      onDragEnd={onDragEnd}
-      onClick={() => onOpenLead(lead.id)}
-    >
-      <div className="kc-top">
-        <span className="kc-empresa">{lead.empresa}</span>
-        <PriorityBadge priority={lead.prioridade} />
-      </div>
-      <span className="seg-tag kc-seg" style={{ "--seg": SEGMENT_COLORS[lead.segmento] }}>
-        <span className="seg-dot" style={{ background: SEGMENT_COLORS[lead.segmento] }}></span>
-        {lead.segmento}
-      </span>
-      <div className="kc-valor mono">{fmtBRL(lead.valor)}<small>/mês</small></div>
-      <div className="kc-foot">
-        <span className="kc-days"><Icon name="clock" size={13} /> {lead.diasNoFunil}d no funil</span>
-        <Avatar initials={lead.dono} size={24} />
-      </div>
-    </div>
+    <button className={"lead-check" + (checked ? " checked" : "") + (indeterminate ? " indet" : "")}
+      title={title} onClick={(e) => { e.stopPropagation(); onChange(); }}>
+      {checked && !indeterminate && <Icon name="check" size={12} strokeWidth={3} />}
+      {indeterminate && <span className="check-dash"></span>}
+    </button>
   );
 }
 
-function Kanban({ leads, onOpenLead, onMoveLead }) {
-  const [draggingId, setDraggingId] = useState(null);
-  const [overCol, setOverCol] = useState(null);
+function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete, canCreate, onBulkWhatsApp, onImportLeads }) {
+  const canSelect = canDelete || canCreate;
+  const [importOpen, setImportOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [segFilter, setSegFilter] = useState("Todos");
+  const [statusFilter, setStatusFilter] = useState("Todos");
+  const [cityFilter, setCityFilter] = useState("Todas");
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState(() => new Set());
 
-  const onDragStart = (e, id) => {
-    setDraggingId(id);
-    e.dataTransfer.effectAllowed = "move";
-    try { e.dataTransfer.setData("text/plain", String(id)); } catch (err) {}
-  };
-  const onDragEnd = () => { setDraggingId(null); setOverCol(null); };
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return leads.filter((l) => {
+      if (q && !(`${l.empresa} ${l.responsavel}`.toLowerCase().includes(q))) return false;
+      if (segFilter !== "Todos" && l.segmento !== segFilter) return false;
+      if (statusFilter !== "Todos" && l.status !== statusFilter) return false;
+      if (cityFilter !== "Todas" && l.cidade !== cityFilter) return false;
+      return true;
+    });
+  }, [leads, search, segFilter, statusFilter, cityFilter]);
 
-  const onDrop = (status) => {
-    if (draggingId != null) onMoveLead(draggingId, status);
-    setDraggingId(null);
-    setOverCol(null);
-  };
+  useEffect(() => { setPage(1); }, [search, segFilter, statusFilter, cityFilter]);
 
-  const byStatus = useMemo(() => {
-    const map = {};
-    KANBAN_COLS.forEach((c) => { map[c.status] = leads.filter((l) => l.status === c.status); });
-    return map;
+  // Drop selections that no longer exist (e.g. after deletion)
+  useEffect(() => {
+    setSelected((prev) => {
+      const ids = new Set(leads.map((l) => l.id));
+      let changed = false;
+      const next = new Set();
+      prev.forEach((id) => { if (ids.has(id)) next.add(id); else changed = true; });
+      return changed ? next : prev;
+    });
   }, [leads]);
 
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const current = page > pageCount ? pageCount : page;
+  const rows = filtered.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
+
+  const filteredIds = useMemo(() => filtered.map((l) => l.id), [filtered]);
+  const selectedInFilter = filteredIds.filter((id) => selected.has(id)).length;
+  const allSelected = filtered.length > 0 && selectedInFilter === filtered.length;
+  const someSelected = selectedInFilter > 0 && !allSelected;
+
+  const toggleOne = (id) => setSelected((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const toggleAll = () => setSelected((prev) => {
+    const next = new Set(prev);
+    if (allSelected) filteredIds.forEach((id) => next.delete(id));
+    else filteredIds.forEach((id) => next.add(id));
+    return next;
+  });
+  const clearSelection = () => setSelected(new Set());
+  const selectedIds = () => filteredIds.filter((id) => selected.has(id));
+  const bulkDelete = () => {
+    const ids = selectedIds();
+    if (!ids.length) return;
+    if (window.confirm(`Remover ${ids.length} lead${ids.length !== 1 ? "s" : ""} selecionado${ids.length !== 1 ? "s" : ""}? Esta ação não pode ser desfeita.`)) {
+      onDeleteLeads(ids);
+      clearSelection();
+    }
+  };
+  const bulkWhatsApp = () => {
+    const ids = selectedIds();
+    if (ids.length && onBulkWhatsApp) onBulkWhatsApp(ids);
+  };
+
   return (
-    <div className="screen-pad kanban-screen fade-in">
-      <div className="kanban-board">
-        {KANBAN_COLS.map((col) => {
-          const items = byStatus[col.status];
-          const total = items.reduce((s, l) => s + l.valor, 0);
-          const meta = STATUS_META[col.status];
-          return (
-            <div
-              key={col.status}
-              className={"kanban-col" + (overCol === col.status ? " col-over" : "")}
-              onDragOver={(e) => { e.preventDefault(); setOverCol(col.status); }}
-              onDragLeave={(e) => { if (e.currentTarget === e.target) setOverCol(null); }}
-              onDrop={() => onDrop(col.status)}
-            >
-              <div className="kanban-col-head">
-                <div className="kch-left">
-                  <span className="kch-dot" style={{ background: meta.color }}></span>
-                  <span className="kch-label">{col.label}</span>
-                  <span className="kch-count">{items.length}</span>
-                </div>
-                <span className="kch-total mono">{fmtBRLk(total)}</span>
-              </div>
-              <div className="kanban-col-body">
-                {items.map((lead) => (
-                  <KanbanCard key={lead.id} lead={lead} onOpenLead={onOpenLead}
-                    onDragStart={onDragStart} onDragEnd={onDragEnd} dragging={draggingId === lead.id} />
-                ))}
-                {overCol === col.status && draggingId != null && (
-                  <div className="kanban-drop-hint">Soltar aqui</div>
+    <div className="screen-pad fade-in">
+      <div className="filter-bar">
+        <div className="search-input">
+          <Icon name="search" size={16} className="search-icon" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por empresa ou contato..." />
+        </div>
+        <Select value={segFilter} onChange={setSegFilter} options={["Todos", ...SEGMENTS]} />
+        <Select value={statusFilter} onChange={setStatusFilter} options={["Todos", ...STATUS]} />
+        <Select value={cityFilter} onChange={setCityFilter} options={["Todas", ...CITIES]} />
+        <div className="filter-count">{filtered.length} de {leads.length}</div>
+        {canCreate && (
+          <button className="btn btn-ghost btn-sm export-btn" title="Importar leads de uma planilha CSV"
+            onClick={() => setImportOpen(true)}>
+            <Icon name="download" size={15} className="import-icon-flip" /> Importar
+          </button>
+        )}
+        <button className="btn btn-ghost btn-sm export-btn" disabled={!filtered.length}
+          title="Exportar os leads filtrados para CSV (Excel)"
+          onClick={() => exportLeadsCSV(filtered, "filtrados")}>
+          <Icon name="download" size={15} /> Exportar
+        </button>
+      </div>
+
+      {canCreate && (
+        <ImportLeadsModal open={importOpen} onClose={() => setImportOpen(false)}
+          autoOn={!!(window.WA && WA.getAuto().onNew)}
+          intervalMin={window.WA ? WA.intervalMin() : 0}
+          existing={leads}
+          onImport={(rows) => onImportLeads && onImportLeads(rows)} />
+      )}
+
+      {canSelect && selectedInFilter > 0 && (
+        <div className="bulk-bar">
+          <div className="bulk-info">
+            <CheckBox checked={allSelected} indeterminate={someSelected} onChange={toggleAll} title="Selecionar todos" />
+            <span className="bulk-count">{selectedInFilter} selecionado{selectedInFilter !== 1 ? "s" : ""}</span>
+          </div>
+          <div className="bulk-actions">
+            {!allSelected && (
+              <button className="bulk-link" onClick={toggleAll}>Selecionar todos os {filtered.length}</button>
+            )}
+            <button className="bulk-link" onClick={clearSelection}>Limpar seleção</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => {
+              const ids = selectedIds();
+              exportLeadsCSV(filtered.filter((l) => ids.includes(l.id)), "selecionados");
+            }}>
+              <Icon name="download" size={15} /> Exportar
+            </button>
+            {canCreate && (
+              <button className="btn btn-wa btn-sm" onClick={bulkWhatsApp}>
+                <Icon name="message-circle" size={15} /> Enviar WhatsApp
+              </button>
+            )}
+            {canDelete && (
+              <button className="btn btn-danger btn-sm" onClick={bulkDelete}>
+                <Icon name="trash" size={15} /> Excluir
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              {canSelect && (
+                <th className="col-check">
+                  <CheckBox checked={allSelected} indeterminate={someSelected} onChange={toggleAll}
+                    title={allSelected ? "Desmarcar todos" : "Selecionar todos"} />
+                </th>
+              )}
+              <th className="col-num">#</th>
+              <th>Empresa</th>
+              <th>Segmento</th>
+              <th>Responsável</th>
+              <th>Cidade</th>
+              <th>Status</th>
+              <th>Último Contato</th>
+              <th>Próxima Ação</th>
+              <th className="col-actions"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((l, idx) => (
+              <tr key={l.id} className={"data-row" + (selected.has(l.id) ? " row-selected" : "")} onClick={() => onOpenLead(l.id)}>
+                {canSelect && (
+                  <td className="col-check" onClick={(e) => e.stopPropagation()}>
+                    <CheckBox checked={selected.has(l.id)} onChange={() => toggleOne(l.id)} title="Selecionar lead" />
+                  </td>
                 )}
-              </div>
-            </div>
-          );
-        })}
+                <td className="col-num mono">{String((current - 1) * PAGE_SIZE + idx + 1).padStart(2, "0")}</td>
+                <td>
+                  <div className="cell-empresa">
+                    <span className="cell-empresa-name">
+                      {l.empresa}
+                      {l.unread > 0 && (
+                        <span className="reply-badge" title="Resposta no WhatsApp">
+                          <Icon name="message-circle" size={11} /> {l.unread}
+                        </span>
+                      )}
+                    </span>
+                    <span className="cell-empresa-cnpj mono">{l.cnpj}</span>
+                  </div>
+                </td>
+                <td>
+                  <span className="seg-tag" style={{ "--seg": SEGMENT_COLORS[l.segmento] }}>
+                    <span className="seg-dot" style={{ background: SEGMENT_COLORS[l.segmento] }}></span>
+                    {l.segmento}
+                  </span>
+                </td>
+                <td>
+                  <div className="cell-resp">
+                    <Avatar initials={l.dono} size={26} />
+                    <span>{l.responsavel}</span>
+                  </div>
+                </td>
+                <td className="cell-muted">{l.cidade}</td>
+                <td><StatusBadge status={l.status} pulse /></td>
+                <td className="cell-muted mono">{fmtDate(l.ultimoContato)}</td>
+                <td className="cell-action-text">{l.proximaAcao}</td>
+                <td className="col-actions" onClick={(e) => e.stopPropagation()}>
+                  <div className="row-actions">
+                    <button className="row-detail-btn" onClick={() => onOpenLead(l.id)}>Ver Detalhes</button>
+                    {canDelete && (
+                      <button className="row-trash" title="Remover lead" onClick={() => {
+                        if (window.confirm(`Remover o lead "${l.empresa}"? Esta ação não pode ser desfeita.`)) onDeleteLead(l.id);
+                      }}><Icon name="trash" size={15} /></button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={10} className="empty-row">Nenhum lead encontrado com os filtros atuais.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="pagination">
+        <span className="pagination-info">
+          Mostrando {rows.length ? (current - 1) * PAGE_SIZE + 1 : 0}–{(current - 1) * PAGE_SIZE + rows.length} de {filtered.length}
+        </span>
+        <div className="pagination-controls">
+          <button className="page-btn" disabled={current === 1} onClick={() => setPage(current - 1)}>
+            <Icon name="chevron-left" size={16} />
+          </button>
+          {Array.from({ length: pageCount }, (_, i) => i + 1).map((p) => (
+            <button key={p} className={"page-btn" + (p === current ? " page-btn-active" : "")}
+              onClick={() => setPage(p)}>{p}</button>
+          ))}
+          <button className="page-btn" disabled={current === pageCount} onClick={() => setPage(current + 1)}>
+            <Icon name="chevron-right" size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-Object.assign(window, { Kanban });
+// ---- Lead detail drawer content -------------------------------------------
+function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDelete, canCreate, onWhatsApp, onReply, onSetOptOut }) {
+  const [tipo, setTipo] = useState("Ligação");
+  const [nota, setNota] = useState("");
+  const [reply, setReply] = useState("");
+  if (!lead) return null;
+
+  const submit = () => {
+    if (!nota.trim()) return;
+    onAddInteraction(lead.id, { tipo, nota: nota.trim() });
+    setNota("");
+  };
+
+  const sendReply = () => {
+    if (!reply.trim()) return;
+    onReply(lead.id, reply.trim());
+    setReply("");
+  };
+
+  // ordena por timestamp real; mensagens antigas sem ts mantêm a ordem do array
+  const _ts = (it) => { if (it.ts) return Number(it.ts); const m = /^in-(\d{10,})/.exec(it.id || ""); return m ? Number(m[1]) : null; };
+  const _filt = [...lead.interacoes].filter((it) => it.kind !== "optout");
+  let _last = 0;
+  const sorted = _filt.map((it, i) => { let t = _ts(it); if (t == null || t < _last) t = _last + 1; _last = t; return { it, i, t }; })
+    .sort((a, b) => a.t - b.t || a.i - b.i).map((x) => x.it);
+  const waNum = (lead.whatsapp || "").replace(/\D/g, "");
+  const optedOut = leadOptedOut(lead);
+
+  return (
+    <div className="lead-detail">
+      <div className="drawer-head">
+        <div className="drawer-head-top">
+          <span className="seg-tag" style={{ "--seg": SEGMENT_COLORS[lead.segmento] }}>
+            <span className="seg-dot" style={{ background: SEGMENT_COLORS[lead.segmento] }}></span>
+            {lead.segmento}
+          </span>
+          <button className="icon-btn" onClick={onClose}><Icon name="x" size={18} /></button>
+        </div>
+        <h2 className="drawer-empresa">{lead.empresa}</h2>
+        <div className="drawer-status-row">
+          <StatusBadge status={lead.status} pulse />
+          <PriorityBadge priority={lead.prioridade} />
+          <span className="drawer-valor mono">{fmtBRL(lead.valor)}<small>/mês</small></span>
+        </div>
+      </div>
+
+      <div className="drawer-body">
+        <div className="detail-grid">
+          <div className="detail-item"><span className="detail-k"><Icon name="briefcase" size={14} /> CNPJ</span><span className="detail-v mono">{lead.cnpj}</span></div>
+          <div className="detail-item"><span className="detail-k"><Icon name="map-pin" size={14} /> Cidade</span><span className="detail-v">{lead.cidade}</span></div>
+          <div className="detail-item"><span className="detail-k"><Icon name="user" size={14} /> Contato</span><span className="detail-v">{lead.responsavel}</span></div>
+          <div className="detail-item"><span className="detail-k"><Icon name="briefcase" size={14} /> Cargo</span><span className="detail-v">{lead.cargo}</span></div>
+          <div className="detail-item"><span className="detail-k"><Icon name="message-circle" size={14} /> WhatsApp</span><span className="detail-v mono">{lead.whatsapp}</span></div>
+          <div className="detail-item"><span className="detail-k"><Icon name="user" size={14} /> Responsável</span><span className="detail-v detail-rep"><Avatar initials={lead.dono} size={22} /> {userInfo(lead.dono).name}</span></div>
+        </div>
+
+        <div className="detail-section-label">Adicionar interação</div>
+        <div className="add-interaction">
+          <div className="add-int-types">
+            {Object.keys(INTERACTION_META).map((t) => (
+              <button key={t} className={"int-type" + (tipo === t ? " active" : "")}
+                style={tipo === t ? { "--c": INTERACTION_META[t].color, borderColor: INTERACTION_META[t].color + "66", color: INTERACTION_META[t].color, background: INTERACTION_META[t].color + "14" } : {}}
+                onClick={() => setTipo(t)}>
+                <Icon name={INTERACTION_META[t].icon} size={14} /> {t}
+              </button>
+            ))}
+          </div>
+          <textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={3}
+            placeholder="Descreva a interação..." className="textarea" />
+          <button className="btn btn-primary btn-block" onClick={submit} disabled={!nota.trim()}>
+            <Icon name="plus" size={16} /> Registrar
+          </button>
+        </div>
+
+        <div className="detail-section-label">Conversa</div>
+        <div className="timeline">
+          {sorted.map((it) => {
+            const inbound = it.dir === "in";
+            const meta = inbound
+              ? { color: "#25D366", icon: "message-circle" }
+              : INTERACTION_META[it.tipo];
+            return (
+              <div className={"tl-item" + (inbound ? " tl-in" : "")} key={it.id}>
+                <div className="tl-marker" style={{ background: meta.color + "1A", color: meta.color, borderColor: meta.color + "44" }}>
+                  <Icon name={meta.icon} size={13} />
+                </div>
+                <div className="tl-content">
+                  <div className="tl-head">
+                    <span className="tl-type" style={{ color: meta.color }}>
+                      {inbound ? "Resposta recebida" : it.tipo}
+                    </span>
+                    <span className="tl-date mono">{fmtDate(it.data)}{(function(){ let t = it.ts ? Number(it.ts) : null; if (t==null){ const mm=/^in-(\d{10,})/.exec(it.id||""); if(mm) t=Number(mm[1]); } if(t==null) return ""; const d=new Date(t); return isNaN(d.getTime())?"":" · "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); })()}</span>
+                  </div>
+                  <p className={"tl-note" + (inbound ? " tl-note-in" : "")}>{it.nota}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {canCreate && (
+          <div className="wa-reply">
+            <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={2}
+              placeholder={waNum ? "Escreva uma resposta no WhatsApp..." : "Lead sem número de WhatsApp"}
+              className="textarea wa-reply-input" disabled={!waNum}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendReply(); }} />
+            <div className="wa-reply-row">
+              <button className="btn btn-ghost btn-sm" onClick={() => onWhatsApp(lead.id)} title="Usar um modelo">
+                <Icon name="message-circle" size={14} /> Modelos
+              </button>
+              <button className="btn btn-wa btn-sm wa-reply-send" onClick={sendReply} disabled={!reply.trim() || !waNum}>
+                <Icon name="message-circle" size={15} /> Enviar resposta
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="drawer-foot">
+        {canDelete ? (
+          <button className="btn btn-danger" onClick={() => {
+            if (window.confirm(`Remover o lead "${lead.empresa}"? Esta ação não pode ser desfeita.`)) onDelete(lead.id);
+          }}><Icon name="trash" size={15} /> Excluir</button>
+        ) : <span></span>}
+        <div className="drawer-foot-right">
+          {onSetOptOut && (optedOut
+            ? <button className="btn btn-ghost" title="Reativar envios" onClick={() => onSetOptOut(lead.id, false)}><Icon name="check" size={15} /> Reativar envios</button>
+            : <button className="btn btn-ghost" title="Não enviar mais mensagens" onClick={() => { if (window.confirm(`Marcar "${lead.empresa}" como opt-out? Não receberá mais mensagens automáticas.`)) onSetOptOut(lead.id, true); }}><Icon name="shield" size={15} /> Opt-out</button>)}
+          <button className="btn btn-ghost" onClick={onClose}>Fechar</button>
+          <button className="btn btn-primary" onClick={() => onEdit(lead)}><Icon name="edit" size={15} /> Editar Lead</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { LeadsTable, LeadDetail });

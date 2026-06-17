@@ -372,6 +372,30 @@ const WA = {
     return { ok: true, simulated: true, noPhone: !to };
   },
 
+  // envia um arquivo (imagem ou documento) pela conversa.
+  // media = { base64, mime, filename, kind: "image"|"document", caption }
+  async sendMedia(lead, media) {
+    const cfg = WA.getCfg();
+    const to = WA.normalizePhone(lead.whatsapp);
+    const validPhone = !!to && to.length >= 12 && to.length <= 13;
+    if (cfg.live && window.SB && SB.isConfigured()) {
+      if (!validPhone) return { ok: false, simulated: false, error: "Número de WhatsApp inválido." };
+      try {
+        const client = await SB.ensureClient();
+        const headers = await WA.authHeaders();
+        if (!headers) return { ok: false, simulated: false, error: "Sessão expirada — saia e entre novamente." };
+        const { data, error } = await client.functions.invoke(WA.fnName(), { body: { to, leadId: lead.id, media }, headers });
+        if (error) throw new Error(await WA.readFnError(error));
+        if (data && data.error) throw new Error(data.error);
+        return { ok: true, simulated: false, data, wamid: (data && data.id) || null };
+      } catch (e) {
+        return { ok: false, simulated: false, error: (e && e.message) ? e.message : String(e) };
+      }
+    }
+    await new Promise((r) => setTimeout(r, 150));
+    return { ok: true, simulated: true, noPhone: !to };
+  },
+
   // pega um token de sessão FRESCO (renova se expirado) e monta o header
   async authHeaders() {
     try {

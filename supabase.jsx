@@ -169,6 +169,21 @@
     if (error) throw error;
     return (data || []).map(leadFromRow);
   }
+  // tempo real: assina mudanças na tabela leads (respostas chegam na hora).
+  // Requer Realtime habilitado para a tabela no painel do Supabase.
+  // Retorna função de cleanup (ou null se indisponível).
+  async function subscribeLeads(onChange) {
+    try {
+      const c = await ensureClient();
+      if (!c || !c.channel) return null;
+      const ch = c.channel("leads-rt-" + Math.random().toString(16).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => {
+          try { onChange(); } catch (e) {}
+        })
+        .subscribe();
+      return () => { try { c.removeChannel(ch); } catch (e) {} };
+    } catch (e) { return null; }
+  }
   async function markLeadRead(id) {
     const c = await ensureClient();
     const { error } = await c.from("leads").update({ unread: 0 }).eq("id", id);
@@ -271,7 +286,7 @@
     isConfigured, isBuiltin, getCfg, setCfg, clearCfg, ensureClient, testConnection,
     signIn, signUp, signOut, sessionProfile,
     fetchAll, insertLead, patchLead, deleteLead, deleteLeads,
-    fetchLeads, markLeadRead,
+    fetchLeads, markLeadRead, subscribeLeads,
     insertTask, patchTask, deleteTask,
     updateProfile, deleteProfile,
     getSettings, saveSettings,
