@@ -55,11 +55,14 @@ function CheckBox({ checked, indeterminate, onChange, title }) {
 
 function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete, canCreate, onBulkWhatsApp, onImportLeads }) {
   const canSelect = canDelete || canCreate;
+  const hasBaileysChan = !!(window.WA && WA.baileysOn());
   const [importOpen, setImportOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [segFilter, setSegFilter] = useState("Todos");
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [cityFilter, setCityFilter] = useState("Todas");
+  const [prospFilter, setProspFilter] = useState("Todos");
+  const [canalFilter, setCanalFilter] = useState("Todos");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(() => new Set());
 
@@ -70,11 +73,15 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete,
       if (segFilter !== "Todos" && l.segmento !== segFilter) return false;
       if (statusFilter !== "Todos" && l.status !== statusFilter) return false;
       if (cityFilter !== "Todas" && l.cidade !== cityFilter) return false;
+      if (prospFilter === "Não prospectados" && (leadProspected(l) || leadOptedOut(l) || l.status === "Perdido")) return false;
+      if (prospFilter === "Já prospectados" && !leadProspected(l)) return false;
+      if (canalFilter === "Oficial" && l.canalProsp !== "oficial") return false;
+      if (canalFilter === "Não-oficial" && l.canalProsp !== "baileys") return false;
       return true;
     });
-  }, [leads, search, segFilter, statusFilter, cityFilter]);
+  }, [leads, search, segFilter, statusFilter, cityFilter, prospFilter, canalFilter]);
 
-  useEffect(() => { setPage(1); }, [search, segFilter, statusFilter, cityFilter]);
+  useEffect(() => { setPage(1); }, [search, segFilter, statusFilter, cityFilter, prospFilter, canalFilter]);
 
   // Drop selections that no longer exist (e.g. after deletion)
   useEffect(() => {
@@ -122,6 +129,20 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete,
     if (ids.length && onBulkWhatsApp) onBulkWhatsApp(ids);
   };
 
+  // ---- prospecção pendente (retomar campanha) ----
+  // leads que ainda não receberam o 1º contato (ignora opt-out e perdidos).
+  const pendingLeads = useMemo(() =>
+    leads.filter((l) => !leadProspected(l) && !leadOptedOut(l) && l.status !== "Perdido"),
+    [leads]);
+  const pendingInFilter = useMemo(() =>
+    filtered.filter((l) => !leadProspected(l) && !leadOptedOut(l) && l.status !== "Perdido"),
+    [filtered]);
+  const selectPending = () => setSelected(new Set(pendingInFilter.map((l) => l.id)));
+  const prospectPending = () => {
+    const ids = pendingInFilter.map((l) => l.id);
+    if (ids.length && onBulkWhatsApp) onBulkWhatsApp(ids);
+  };
+
   return (
     <div className="screen-pad fade-in">
       <div className="filter-bar">
@@ -133,6 +154,8 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete,
         <Select value={segFilter} onChange={setSegFilter} options={["Todos", ...SEGMENTS]} />
         <Select value={statusFilter} onChange={setStatusFilter} options={["Todos", ...STATUS]} />
         <Select value={cityFilter} onChange={setCityFilter} options={["Todas", ...CITIES]} />
+        <Select value={prospFilter} onChange={setProspFilter} options={["Todos", "Não prospectados", "Já prospectados"]} />
+        {hasBaileysChan && <Select value={canalFilter} onChange={setCanalFilter} options={["Todos", "Oficial", "Não-oficial"]} />}
         <div className="filter-count">{filtered.length} de {leads.length}</div>
         {canCreate && (
           <button className="btn btn-ghost btn-sm export-btn" title="Importar leads de uma planilha CSV"
@@ -146,6 +169,36 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete,
           <Icon name="download" size={15} /> Exportar
         </button>
       </div>
+
+      {canCreate && pendingLeads.length > 0 && (
+        <div className="prosp-pending-bar">
+          <div className="prosp-pending-info">
+            <span className="prosp-pending-icon"><Icon name="message-circle" size={16} /></span>
+            <div>
+              <div className="prosp-pending-count">{pendingLeads.length} lead{pendingLeads.length !== 1 ? "s" : ""} ainda não prospectado{pendingLeads.length !== 1 ? "s" : ""}</div>
+              <div className="prosp-pending-sub">
+                {prospFilter === "Não prospectados"
+                  ? "Mostrando só os que faltam. Selecione e dispare para retomar de onde parou."
+                  : (pendingInFilter.length !== pendingLeads.length
+                      ? `${pendingInFilter.length} pendente${pendingInFilter.length !== 1 ? "s" : ""} no filtro atual`
+                      : "Retome de onde parou — dispare só para quem ainda não recebeu o 1º contato.")}
+              </div>
+            </div>
+          </div>
+          <div className="prosp-pending-actions">
+            {prospFilter !== "Não prospectados" && (
+              <button className="bulk-link" onClick={() => setProspFilter("Não prospectados")}>Ver só os pendentes</button>
+            )}
+            <button className="btn btn-ghost btn-sm" onClick={selectPending} disabled={!pendingInFilter.length}>
+              <Icon name="check" size={14} /> Selecionar pendentes
+            </button>
+            <button className="btn btn-wa btn-sm btn-nowrap" onClick={prospectPending} disabled={!pendingInFilter.length}
+              title="Enviar 1º contato para os leads ainda não prospectados (no filtro atual)">
+              <Icon name="message-circle" size={15} /> <span>{`Prospectar ${pendingInFilter.length} ${pendingInFilter.length !== 1 ? "pendentes" : "pendente"}`}</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {canCreate && (
         <ImportLeadsModal open={importOpen} onClose={() => setImportOpen(false)}
@@ -220,6 +273,11 @@ function LeadsTable({ leads, onOpenLead, onDeleteLead, onDeleteLeads, canDelete,
                   <div className="cell-empresa">
                     <span className="cell-empresa-name">
                       {l.empresa}
+                      {!leadProspected(l) && !leadOptedOut(l) && (
+                        <span className="notprosp-badge" title="Ainda não prospectado">Novo</span>
+                      )}
+                      {l.canalProsp === "baileys" && <span className="canal-badge nao" title="Lista não-oficial">Não-oficial</span>}
+                      {l.canalProsp === "oficial" && <span className="canal-badge ofi" title="Lista oficial">Oficial</span>}
                       {l.unread > 0 && (
                         <span className="reply-badge" title="Resposta no WhatsApp">
                           <Icon name="message-circle" size={11} /> {l.unread}
@@ -306,7 +364,7 @@ function LeadDetail({ lead, onClose, onAddInteraction, onEdit, onDelete, canDele
 
   // ordena por timestamp real; mensagens antigas sem ts mantêm a ordem do array
   const _ts = (it) => { if (it.ts) return Number(it.ts); const m = /^in-(\d{10,})/.exec(it.id || ""); return m ? Number(m[1]) : null; };
-  const _filt = [...lead.interacoes].filter((it) => it.kind !== "optout");
+  const _filt = [...lead.interacoes].filter((it) => it && !it.kind && it.data);
   let _last = 0;
   const sorted = _filt.map((it, i) => { let t = _ts(it); if (t == null || t < _last) t = _last + 1; _last = t; return { it, i, t }; })
     .sort((a, b) => a.t - b.t || a.i - b.i).map((x) => x.it);
